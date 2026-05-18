@@ -29,9 +29,10 @@ When analyzing a muscle group, the system uses each exercise's recency-weighted 
 
 ### Non-Goals
 
-- Replacing the existing `/workouts/progression` endpoint. That endpoint operates on raw workouts and powers the current per-exercise Progress page; this table powers a *new* muscle-group view alongside it. Consolidation is a follow-up, not a blocker.
 - Storing per-set rows. Aggregation to per-(workout, exercise) min/avg/max is intentional; per-set granularity is not needed for the muscle-group view and would inflate row counts significantly.
 - Persisting the baseline itself. The baseline is a derived read-time computation.
+
+Originally this section also listed "replacing the existing `/workouts/progression` endpoint" as a non-goal. That decision flipped during implementation: the per-exercise endpoint was retired and `/workouts/progression` now serves the muscle-group view exclusively. The two views never coexisted in production.
 
 ## Implementation Details
 
@@ -47,8 +48,8 @@ A new table, `exercise_one_rep_max_history`, stores one row per (workout, exerci
 | `exercise_id` | text | Catalog slug, e.g. `barbell-bench-press`. |
 | `performed_at` | text (RFC3339) | Mirrored from the parent workout so time-range filters do not need a join. |
 | `min_estimated_1rm` | real | Smallest per-set estimated 1RM among this exercise's sets in the workout. |
-| `avg_estimated_1rm` | real | Mean per-set estimated 1RM across those sets. The primary value used by the baseline. |
-| `max_estimated_1rm` | real | Largest per-set estimated 1RM among those sets. |
+| `avg_estimated_1rm` | real | Mean per-set estimated 1RM across those sets. Carried for display in the per-workout estimates table on the Progress page. |
+| `max_estimated_1rm` | real | Largest per-set estimated 1RM among those sets. Used by the recency-weighted baseline (max chosen over avg so warmup sets don't deflate the signal). |
 | `set_count` | integer | Number of sets aggregated. |
 | `unit` | text | `lb` or `kg`, mirrored from the underlying sets. |
 | `created_at` | text (RFC3339) | Row creation timestamp. |
@@ -95,38 +96,38 @@ The user's *current* estimated one rep max for an exercise — the baseline used
 ```
 baseline = Σ (wᵢ × vᵢ) / Σ wᵢ
 
-where  vᵢ = avg_estimated_1rm of entry i
+where  vᵢ = max_estimated_1rm of entry i
        wᵢ = exp( −(t_now − tᵢ) / τ )
        τ  = 45 days
 ```
 
+`max_estimated_1rm` was chosen over `avg_estimated_1rm` because the per-workout average is pulled down by warmup sets, which has nothing to do with the lifter's actual capability. The per-workout max is almost always one of the working sets, so it tracks the load that answers "what could this person do today?" without polluting the signal with warmup protocol drift. A future warmup-flag-on-sets feature can replace this with a "working-set average" without changing the formula's shape.
+
 Only entries with `performed_at` within the last **90 days** are included. Older entries are not representative of the lifter's current capability through the noise of program changes, deloads, and accessory rotations.
 
-The 45-day time constant gives a half-life of about 31 days — each successive month of training contributes roughly half the weight of the prior month. Worked example: a lifter who benches once a week for twelve weeks and then deloads has thirteen entries in the window. The deload entry's weight is `1.0` and the sum of all weights is about `6.0`, so the deload contributes roughly 17% of the baseline. If the deload session's estimated 1RM is 90% of the lifter's normal value, the baseline drops by about 2% — visible but not crashing. The baseline tracks sustained capability rather than the lifter's most recent training day.
+The 45-day time constant gives a half-life of about 31 days — each successive month of training contributes roughly half the weight of the prior month. Worked example: a lifter who benches once a week for twelve weeks and then deloads has thirteen entries in the window. The deload entry's weight is `1.0` and the sum of all weights is about `6.0`, so the deload contributes roughly 17% of the baseline. If the deload session's max is 90% of the lifter's normal value, the baseline drops by about 2% — visible but not crashing. The baseline tracks sustained capability rather than the lifter's most recent training day.
 
-If fewer than two entries exist within the 90-day window for an exercise, the baseline is simply that single entry's `avg_estimated_1rm` — there is not enough data for a meaningful weighted average until the second session.
+If fewer than two entries exist within the 90-day window for an exercise, the baseline is simply that single entry's `max_estimated_1rm` — there is not enough data for a meaningful weighted average until the second session.
 
 The window length and time constant are tunable parameters. The values above are a defensible starting point; they should be revisited once enough beta users have logged a meaningful training history to validate the smoothing behavior against real deload and progression patterns.
 
 ### Backfill Strategy
 
-Because every row is fully derivable from `workouts`, backfilling existing data is straightforward and idempotent. The migration that introduces `exercise_one_rep_max_history` runs in two steps:
+Because every row is fully derivable from `workouts`, backfilling existing data is straightforward and idempotent. The mechanism splits across two stages:
 
-1. Create the empty table and its composite index.
-2. In the same migration, iterate over every existing workout, group its sets by `exercise_id`, and insert one row per group with min/avg/max computed from those sets.
+1. **SQL migration** — creates the empty table and its composite index. No data population in the migration itself; this keeps the migration step bounded and cheap.
+2. **In-process backfill function** (`BackfillOneRepMaxHistory`) — runs on every startup, gated by an `existing > 0` row-count check on the table. On the first boot after the migration ships, the gate passes and the function iterates over every non-deleted workout, calls the same aggregation function as the live write path, and inserts the rows in a single transaction. Subsequent boots find rows present and skip.
 
-Both the runtime write path and the backfill loop should share a single aggregation function so that backfilled rows are guaranteed to match what a freshly written row would have contained for the same workout. This is the single most important invariant of the backfill — if it holds, all downstream analyses see a uniform shape regardless of whether a row was written at create-time or backfilled.
+The shared aggregation function is the single most important invariant of the backfill. The live write path and the backfill both call `AggregateOneRepMax`, so backfilled rows are guaranteed to match what a freshly written row would have contained for the same workout. Without that, the two write paths could subtly diverge over time and downstream analyses would see inconsistent shapes.
 
-Failures during the backfill are recoverable: truncate the table and re-run the migration. There is no destructive state in the new table, and `workouts` is untouched.
+Failures during the backfill are recoverable: truncate the table and restart the API. The next boot finds it empty and rebuilds from `workouts`. There is no destructive state in the new table, and `workouts` is untouched.
 
-At current beta scale (low thousands of workouts across all users), the backfill completes in well under a minute on the API instance and can run inline with the migration. If the table later grows past a few hundred thousand rows, the backfill should be promoted to a separate CLI command so the schema migration can complete quickly during a deploy and the data population can run independently — but that decision can wait until growth justifies it.
+At current beta scale (low thousands of workouts across all users), the backfill completes in well under a minute on the API instance. If the table later grows past a few hundred thousand rows, the backfill should be promoted to a separate CLI command so the API container starts faster on deploys; until then, in-process at startup is the simpler story.
 
 ## Open Questions
 
-1. **Warmup sets**. Should warmup sets be excluded from min/avg/max aggregation? If yes, warmup detection has to live in the write path and the `workouts` schema probably needs a per-set warmup flag. The alternative is to include all sets and let consumers treat `max_estimated_1rm` as the load-bearing signal — `min` and `avg` then become noisier but the table stays simple. **Resolution pending** on whether the workout schema gains warmup awareness.
+1. **Warmup sets** — *partially resolved*. The original concern was that warmup sets pollute the per-workout `avg_estimated_1rm` and therefore the baseline. The recency-weighted baseline now reads `max_estimated_1rm` instead of `avg_estimated_1rm`, which addresses the spirit of the question: max almost always picks a working set, so warmups don't get into the signal. A per-set warmup flag on the `workouts` schema remains a future option — it would let us also clean up the displayed `avg` and `min` values — but it is no longer load-bearing for the baseline math.
 
-2. **Mixed-unit workouts**. It is unusual but possible for a workout to contain both `lb` and `kg` sets for the same exercise. Two options: (a) the row's `unit` is the most-common unit (matching the existing `/workouts/progression` handler) and the minority sets are dropped from aggregation, or (b) all sets are converted to the user's preferred unit before aggregation. (a) is simpler and consistent with existing behavior; (b) is more correct but requires the user's unit preference to be in scope at write time. **Lean toward (a)** for parity.
+2. **Mixed-unit workouts**. It is unusual but possible for a workout to contain both `lb` and `kg` sets for the same exercise. Two options: (a) the row's `unit` is the most-common unit (matching the existing `/workouts/progression` handler) and the minority sets are dropped from aggregation, or (b) all sets are converted to the user's preferred unit before aggregation. **Shipped with (a)**; revisit if mixed-unit users surface as a real cohort.
 
-3. **Relationship to `/workouts/progression`**. The API already computes per-set Epley 1RM on the fly from raw workouts to render the current Progress page. Once this table exists, that endpoint becomes redundant for the same data — it could be refactored to read from this table. The refactor is deferred until the muscle-group view ships, at which point the two views can share read paths.
-
-4. **External API surface**. Should `exercise_one_rep_max_history` be exposed via its own endpoint, or used purely internally to compute the muscle-group view? The simpler MVP is internal-only; exposing raw history publicly invites premature consumer dependencies on a schema we expect to tune.
+3. **External API surface**. Should `exercise_one_rep_max_history` be exposed via its own endpoint, or used purely internally to compute the muscle-group view? **Shipped internal-only**; raw history is not exposed. Exposing it publicly would invite premature consumer dependencies on a schema we expect to tune.

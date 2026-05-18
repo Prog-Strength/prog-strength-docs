@@ -1,6 +1,6 @@
 # Personal Records
 
-**Status**: Draft · **Last updated**: 2026-05-18
+**Status**: Shipped · **Last updated**: 2026-05-18
 
 ## Introduction
 
@@ -98,7 +98,7 @@ One row per PR break. Append-only at the API surface — entries are derived fro
 A package-level constant slice in the backend identifies which exercises are surfaced on the Personal Records page:
 
 ```go
-// internal/personalrecord/headline.go (or similar)
+// internal/workout/headline_lifts.go
 var HeadlineLifts = []string{
     "barbell-bench-press",
     "barbell-high-bar-back-squat",
@@ -106,7 +106,7 @@ var HeadlineLifts = []string{
 }
 ```
 
-Slugs must exist in the exercise catalog; a startup or test-time check enforces this so a typo doesn't ship silently. The catalog already contains the first two; `barbell-deadlift` is added to the catalog as part of this work if not already present.
+Slugs must exist in the exercise catalog; the unit test `TestHeadlineLifts_AllInCatalog` enforces this so a typo can't ship silently. `barbell-deadlift` was added to the catalog as part of this work — the other two were already there.
 
 ### Write Path
 
@@ -125,10 +125,13 @@ The "recompute" operation underlying all three paths is: for a given `(user_id, 
 **PR detection rule.** A set qualifies as a candidate for the PR if and only if:
 
 ```
-set.weight > current_pr.weight   (or no current PR exists for this exercise)
+set.weight > 0
+AND set.weight > current_pr.weight   (or no current PR exists for this exercise)
 ```
 
 Notably, the rule has *no* `reps == 1` constraint. A lifter who hits 305 × 3 when their current PR is 300 × 1 sets a new PR; their estimated one rep max via Epley rises in step, so the disparity between PR weight and estimated 1RM stays meaningful without forcing the lifter into a true 1RM attempt just to update the record.
+
+**Bodyweight sets are excluded.** Sets where `weight == 0` (push-ups, unweighted pull-ups, dips, etc.) are filtered out of the recompute before the heaviest-set selection. The `personal_records` schema enforces `CHECK(weight > 0)` and rep-based progression on bodyweight exercises is a different ranking model — it belongs to the per-rep-range PR future work, not this table. Weighted variants (e.g. weighted pull-ups at +25 lb) still produce PRs; only the bodyweight portion of mixed-set workouts is dropped.
 
 **Unit reconciliation.** Most users log in a single unit, but mixed-unit users exist. When comparing a candidate set against the current PR in a different unit, convert before comparing:
 
@@ -176,8 +179,9 @@ The agent reads PR context through the same two routes: `GET /personal-records` 
 
 ## Open Questions
 
-1. **PR ties within a single workout.** If a workout has two sets at the same weight on the same exercise, they tie. Both reference the same workout so the record is the same either way. Documenting that we ignore this rather than picking which set "won."
+1. **Soft-delete reversal.** Workouts are soft-deleted today; un-deletion is not supported. The recompute on workout delete drops events rather than tombstoning them, so re-creating a deleted workout would re-emit events as if it were new — fine. **Lean: do nothing now; revisit if un-delete is ever scoped.**
 
-2. **Same-workout PR break for an exercise that was already a PR earlier in the workout.** Within a single workout, if a lifter ramps up — e.g. 295 × 1, 300 × 1, 305 × 1 — should each rep emit its own event row, or should we collapse them into a single event for the workout's heaviest set? **Lean: collapse to one event per `(workout, exercise)` so the workout gets a single 🏆 rather than three.** Each event's `previous_weight` references the PR weight *before* the workout, not the intra-workout intermediate.
+### Resolved during implementation
 
-3. **Soft-delete reversal.** Workouts are soft-deleted today; un-deletion is not supported. The recompute on workout delete drops events rather than tombstoning them, so re-creating a deleted workout would re-emit events as if it were new — fine. **Lean: do nothing now; revisit if un-delete is ever scoped.**
+- **PR ties within a single workout.** If a workout contains multiple sets at the same weight on the same exercise, they tie. Both reference the same workout, so the record is the same either way; the heaviest-set-per-workout-wins implementation does not pick a "winner" and emits no extra event. The Write Path's tie semantics ("a set whose weight exactly matches the current PR does *not* overwrite the record") covers this.
+- **Same-workout PR ramping.** A lifter ramping up within one session — e.g. 295 × 1, 300 × 1, 305 × 1 — produces a single event per `(workout, exercise)` for the workout's heaviest set, not one per intermediate. The event's `previous_weight` references the PR before the workout, not any intra-workout intermediate. Pinned by `TestRecomputePR_HeaviestSetPerWorkoutWins`.
