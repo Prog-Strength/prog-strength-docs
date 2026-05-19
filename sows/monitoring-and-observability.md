@@ -8,7 +8,7 @@
 
 The platform has neither today. There is no place to look at API latency or request rate; no place to see how the agent is performing across turns; no record of what tools the agent calls or how often the model router picks Sonnet over Haiku. Bugs are caught only when they break the UI hard enough to notice.
 
-Past experience with CloudWatch and Datadog made custom metrics ruinously expensive, so a vendor stack is off the table. This work stands up a self-hosted Prometheus + Grafana setup on the same EC2 instance the rest of the backend runs on, plus a structured telemetry database the Go API owns. Once shipped, the answers to "is the API healthy?", "is the agent making good decisions?", and "where is it slow?" all live in one place — accessible over SSH tunnel, defined as code, and costs nothing beyond the host that's already running.
+Past experience with CloudWatch and Datadog made custom metrics ruinously expensive, so a vendor stack is off the table. This work stands up a self-hosted Prometheus + Grafana setup on the same EC2 instance the rest of the backend runs on, plus a structured telemetry database the Go API owns. Once shipped, the answers to "is the API healthy?", "is the agent making good decisions?", and "where is it slow?" all live in one place — accessible at a public HTTPS URL behind Grafana's admin login, defined as code, and costing nothing beyond the host that's already running.
 
 ## Proposed Solution
 
@@ -26,7 +26,9 @@ Three Grafana dashboards, all defined as JSON in `prog-strength-infra/grafana/da
 - **API Health** — request rate by route, latency p50/p95/p99 by route, 4xx/5xx rate, top endpoints.
 - **Host Health** — CPU, memory, disk, network from `node_exporter`; container restart counts.
 
-Grafana is reachable only via SSH tunnel to the EC2 host. No public Grafana URL, no Caddy route, no external auth integration.
+Grafana is reachable at `https://monitoring.progstrength.fitness`, reverse-proxied through Caddy with auto-provisioned Let's Encrypt TLS. Access is gated by Grafana's built-in admin user/password, seeded from GitHub repository secrets on `prog-strength-api`. The container also stays bound to `127.0.0.1:3000` on the host so an SSH tunnel remains a fallback when Caddy or DNS is in a bad state.
+
+Originally scoped as SSH-tunnel-only (see the corresponding non-goal below); the decision flipped once the dashboard's day-to-day usefulness made the friction of always tunneling not worth it. The mitigation is a non-default admin username plus a long random password — both sourced from secrets, both gating a single login form on a single-user beta.
 
 ## Goals and Non-Goals
 
@@ -46,7 +48,7 @@ Grafana is reachable only via SSH tunnel to the EC2 host. No public Grafana URL,
 - **Alerting.** No Alertmanager, no PagerDuty, no Slack notifications. Dashboards only — at single-user beta scale, push notifications about a side project would be more noise than signal.
 - **Sampling.** Every chat turn is captured. At a single user generating maybe dozens of turns a day, full capture is trivially within SQLite write capacity.
 - **MCP server `/metrics`.** Scoped out for MVP; the agent already times its own MCP tool calls, which covers the visible part of the agent → MCP path. The MCP server can grow its own exporter later.
-- **Public Grafana.** SSH tunnel only. No Caddy reverse proxy, no Grafana SSO/OAuth, no basic auth front door.
+- **External auth integration for Grafana** (SSO, OAuth provider, basic auth in front of Grafana's own login form). Access is gated by Grafana's built-in admin user/password with credentials seeded from GitHub repository secrets — adequate for a single-user beta. Adding SSO or layered auth becomes worth doing if multi-user access lands. Note: this section originally listed "Public Grafana" as a non-goal entirely (SSH tunnel only). That decision flipped during implementation in favor of browser convenience; see the Proposed Solution.
 - **Distributed tracing.** OpenTelemetry, Jaeger, Tempo all add complexity that a single-host beta does not need. Structured per-turn rows in `telemetry.db` give us the join key (`turn_id`) to reconstruct the order of events within a turn; that is enough until services span hosts.
 - **Persisting `telemetry.db` to S3 via Litestream.** The whole point of separating it from `app.db` is that this data is replaceable. Litestream stays scoped to `app.db`.
 - **Surfacing chat history to the user.** This SOW makes the agent's messages durable on the server for the first time, but it does not introduce a UI for the user to browse past chats. That is a product feature, not an observability one.
@@ -182,7 +184,7 @@ Three new services in `docker-compose.yml`:
 
 - **`prometheus`** — official `prom/prometheus` image. Config mounted from `prog-strength-infra/prometheus/prometheus.yml`. Default 15-day TSDB retention. Volume mounted at `/prometheus` for the time-series store.
 - **`node_exporter`** — official `prom/node-exporter` image. Mounts `/proc`, `/sys`, and `/` read-only for host metrics. Scraped by Prometheus alongside the application services.
-- **`grafana`** — official `grafana/grafana` image. Dashboards and datasources provisioned via files mounted from `prog-strength-infra/grafana/`. Volume mounted at `/var/lib/grafana` for the SQLite-backed Grafana config store. Bound to `127.0.0.1:3000` only on the host, so the public internet cannot reach it; SSH tunnel forwards a local port to access the UI.
+- **`grafana`** — official `grafana/grafana` image. Dashboards and datasources provisioned via files mounted from `prog-strength-infra/monitoring/grafana/`. Volume mounted at `/var/lib/grafana` for the SQLite-backed Grafana config store. Reverse-proxied by Caddy at `https://monitoring.progstrength.fitness` (the dedicated vhost in the Caddyfile); also bound to `127.0.0.1:3000` on the host as an SSH-tunnel fallback. Admin user and password seeded from the `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` env vars, which the deploy workflow forwards from GitHub repository secrets.
 
 No service depends on Prometheus or Grafana for startup. If the metrics stack is down, the API and agent keep serving traffic — `/metrics` endpoints just don't get scraped.
 
