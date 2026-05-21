@@ -1,6 +1,6 @@
 # Monitoring and Observability
 
-**Status**: Draft · **Last updated**: 2026-05-18
+**Status**: Shipped · **Last updated**: 2026-05-21
 
 ## Introduction
 
@@ -194,12 +194,12 @@ No service depends on Prometheus or Grafana for startup. If the metrics stack is
 - **Recoverability**: telemetry data is replaceable by design. If `telemetry.db` is corrupted or lost, truncate it and let it repopulate from new traffic. No backfill from `app.db` is possible — pre-feature chat history was never persisted.
 - **Scale boundary**: at single-user scale the database stays small for a long time. If it later grows past a few GB or if SQLite locking ever shows up on the latency dashboards, the natural escalation is a dedicated write process (e.g. a small Litestream-style writer-process for telemetry) or moving telemetry to a columnar store (DuckDB). Both are far away; current decision is the simplest one that works.
 
-## Open Questions
+## Resolutions
 
-1. **What goes in `agent_messages` exactly?** The user's prompt and the assistant's response are obvious. Does the system prompt count? Does each tool result message Anthropic injects into the next turn count? **Lean**: log only the human-facing pair — user message and final assistant response — to keep the table understandable and the content small. System prompt is captured separately (by hash + version) as a turn-level field if it becomes useful.
+1. **What goes in `agent_messages`.** Shipped the lean: only the human-facing pair — the user's prompt and the final assistant response. System prompts and the tool-result messages Anthropic injects between turns do not get rows. Implemented as `MessageRecord` in `prog-strength-agent/src/prog_strength_agent/telemetry.py`. System prompt versioning was deferred — when it becomes useful, it lands as a turn-level field, not as additional message rows.
 
-2. **Tool arguments storage**. The `arguments_json` column carries the full tool input. For `create_workout` that includes the entire structured workout. At single-user scale this is fine; at higher volume the column could dominate database size before the TTL kicks in. **Lean**: store full JSON, rely on the 90-day TTL, revisit if writes become hot.
+2. **Tool arguments storage.** Shipped the lean: `arguments_json` carries the full tool input, and the 90-day TTL job NULLs it (along with `result_summary`) after the retention window. The column has not been a bottleneck at single-user scale; revisit if `telemetry.db` write throughput shows up on a dashboard.
 
-3. **Grafana SQLite datasource for telemetry.db**. Grafana can read SQLite directly via a community datasource plugin. The alternative is for the API to expose `/internal/telemetry/query` endpoints that the Grafana panels hit. **Lean**: SQLite datasource plugin — simpler, no API surface to maintain — but worth confirming the plugin is healthy enough for production use before committing.
+3. **Grafana SQLite datasource for telemetry.db.** Did **not** ship the SQLite datasource. Instead, the agent emits custom Prometheus counters (`agent_turns_total`, `agent_tokens_total`, `agent_routing_decisions_total`) and the agent dashboard queries those. `telemetry.db` still gets populated as the durable per-event record — that's what unlocks the future chat-history UI — but no dashboard reads from it today. The deciding factor was that Prometheus was already provisioned for API + host metrics, so reusing it removed one moving piece (the community SQLite plugin) without losing any dashboard signal. If a query ever needs row-level granularity that aggregated counters can't provide, wiring the SQLite datasource then is still on the table.
 
-4. **Sensitive content in chats**. Lifters could share private health information in the chat. The 90-day TTL contains the long-tail exposure, but anyone with EC2 SSH access can read recent content. **Lean**: out of scope for this SOW; raise as a separate threat-modeling exercise once the platform actually has more than one user.
+4. **Sensitive content in chats.** Unchanged — still out of scope, still relying on the 90-day TTL plus EC2 access control as the mitigation. Worth a dedicated threat-modeling pass when the user base grows past one.
