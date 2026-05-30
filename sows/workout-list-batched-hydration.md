@@ -1,6 +1,6 @@
 # Workout List — Batched Hydration
 
-**Status**: Approved · **Last updated**: 2026-05-30
+**Status**: Shipped · **Last updated**: 2026-05-30
 
 ## Introduction
 
