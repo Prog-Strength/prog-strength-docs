@@ -1,6 +1,6 @@
 # Workout List — Batched Hydration
 
-**Status**: Draft · **Last updated**: 2026-05-30
+**Status**: Approved · **Last updated**: 2026-05-30
 
 ## Introduction
 
@@ -107,8 +107,10 @@ Single commit, single deploy. The change is internal to the SQLite repositories;
 
 No feature flag is necessary. The drain-rows fix that just shipped was deployed the same way (commit → semantic-release → ECR → SSH deploy) and that's the path this work follows.
 
-## Open Questions
+## Resolutions
 
-1. **Where does the counting-driver shim live?** Options: (a) a `internal/testutil` package shared across domain test suites, (b) inline in each `*_test.go` that needs it, (c) a vendored upstream library like `github.com/DATA-DOG/go-sqlmock` (but that's for mock SQL, not counting). Tentative lean: (a) — counting connection-level statements is a generic enough utility that a shared `testutil/sqlcount` helper pays off the first time a second domain needs it. The shim is ~30 lines; nothing exotic.
-2. **Should the statement-count assertion live in a benchmark or a regular test?** Benchmarks don't run on CI by default in the current Makefile / workflow; a regular `Test` does. Tentative lean: write it as a regular test that asserts `count == 3`, plus a sibling benchmark for the wall-time number. CI catches regressions, dev workflow gets the perf signal.
-3. **Do we want to backport the same pattern to `attachPersonalRecordEvents`?** That helper is already bulk-fetching via a single `IN`-clause query, so it isn't N+1. It is, however, one more place a future contributor could accidentally introduce the pattern. Tentative lean: leave it alone; the parity tests + concurrency soak above are the regression guard, and we don't need a code change in code that's already correct.
+1. **Counting-driver shim location** — landed at `internal/testutil/sqlcount`, exposing `Open(dsn) (*sql.DB, *Counter, error)`. Implementation wraps `mattn/go-sqlite3` at the `driver.Conn` layer, overriding `QueryContext` and `ExecContext` to bump an atomic counter before delegating. Prepare-and-Stmt-based code paths are NOT counted (the repos use direct `QueryContext`/`ExecContext`, so the gap is theoretical for now).
+2. **Statement-count assertion lives in a regular test, not a benchmark.** `TestListByUser_StatementCount`, `TestGetByID_StatementCount`, `TestList_StatementCount`, and `TestList_FilteredStatementCount` all assert exact `count == 3` and run as part of `go test ./...`. No separate benchmark — at single-user data sizes the wall-time delta isn't worth a dedicated bench target; the count assertion is the load-bearing regression guard.
+3. **`attachPersonalRecordEvents` was left untouched** as the SOW leaned. Audit confirmed it was already bulk-fetching via a single IN-clause query; no N+1 to fix there.
+
+Benchmark numbers were not captured. At v1 single-user scale, the per-call wall-time difference between the old and new code is dominated by SQLite's per-statement parse/plan overhead (microseconds), which doesn't show up on dashboards. The deadlock-prevention concurrency soak (`TestListByUser_NoPoolDeadlock`, 100 concurrent calls vs a 2-conn pool) is the more meaningful proof-of-property test.
