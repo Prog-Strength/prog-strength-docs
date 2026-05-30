@@ -1,6 +1,6 @@
 # Prog Strength Initial Mobile App Implementation
 
-**Status**: Draft · **Last updated**: 2026-05-30
+**Status**: Shipped · **Last updated**: 2026-05-30
 
 ## Introduction
 
