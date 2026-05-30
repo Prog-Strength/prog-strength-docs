@@ -19,7 +19,7 @@ After this work ships, every chat the user sends gets saved as part of a named s
 
 A new `chat` domain in `prog-strength-api` owns two SQLite tables — `chat_sessions` (one row per conversation) and `chat_messages` (one row per turn-side). The API exposes a small CRUD surface for sessions plus an append endpoint for turns. The agent stays unchanged: it remains stateless, and the client continues to send `messages: [...]` to `/chat` exactly as today.
 
-The client owns the lifecycle. When the user opens chat fresh, the client calls `POST /chat-sessions` to mint a new session id, then streams the first turn against the agent as usual. After the stream completes, the client posts the turn (the user message + the assistant reply + any tool metadata) to the API. The session's title is set server-side from the first user message — first ~60 characters, trimmed. Subsequent turns append in the same shape.
+The client owns the lifecycle. When the user opens chat fresh, the client calls `POST /chat-sessions` to mint a new session id, then streams the first turn against the agent as usual. After the stream completes, the client posts the turn (the user message + the assistant reply + any tool metadata) to the API. Titles are LLM-generated: after the first turn lands, the client fires off a separate call to a new lightweight endpoint on the agent that asks Haiku for a 3–6 word title summarizing the conversation, then PATCHes that title onto the session. The title call is async and fire-and-forget — the user keeps chatting while it runs, and a slow or failed title call doesn't block anything. Subsequent turns just append; the title doesn't regenerate.
 
 Browsing history is a `GET /chat-sessions` paginated list ordered by `last_message_at DESC`. Opening a session is `GET /chat-sessions/{id}` which returns the session plus its full message array; the client renders that, then continues exactly as it would for a fresh session — the user types, the client streams against the agent (sending the rehydrated message history), and the new turn appends back to the same session.
 
@@ -32,7 +32,7 @@ Both the web client and the mobile client gain a "Chat history" surface — a si
 ### Goals
 
 - Persist every chat turn the user completes (user message + assistant reply + any tool metadata) against a `chat_sessions` row.
-- Auto-generate a session title from the first user message (first ~60 chars). No manual rename in v1.
+- Auto-generate a friendly session title (3–6 words) by asking Haiku to summarize the conversation after the first turn completes. The title appears asynchronously a second or two after the assistant's reply lands. If the LLM call fails, fall back to a trimmed slice of the first user message so the title is always populated within one turn. No manual rename in v1.
 - Surface a history list on both web (sidebar / drawer) and mobile (history screen reachable from the chat tab). Each row shows the title and the relative time of the last message.
 - Tapping a history entry restores the conversation: the client renders the full message log and the next user turn continues against the same session id.
 - Allow the user to delete a session explicitly. Deletion cascades to its messages.
@@ -130,11 +130,14 @@ Appends one turn (the user message + the assistant reply). Request body shape:
 Inside one transaction:
 
 - **Authorize.** Reject 404 if the session doesn't exist, was soft-deleted, or belongs to another user.
-- **Set the title if empty.** On the first append (current `title == ''`), set `title = firstSixtyChars(user.content)`.
 - **Append two rows** to `chat_messages`. The user row first, then the assistant row, with `position = current_max + 1` and `current_max + 2` respectively.
 - **Bump session timestamps.** `updated_at = now()`, `last_message_at = now()`.
 
-Returns the updated session + the two new message rows.
+Returns the updated session + the two new message rows. The title is NOT set here — see the Title generation subsection below for how it lands.
+
+**`PATCH /chat-sessions/{id}`**
+
+Updates session-level fields. v1 accepts a single field: `{ "title": "<string>" }`. Validates `1 <= len(title) <= 80` after trimming, rejects everything else with 400. Used by the client to persist the LLM-generated title after the first turn (and, in a follow-up, by a manual rename UI).
 
 The two-rows-per-turn shape (vs one row with both sides) matches the Anthropic role enum and lets future features (e.g. mid-turn edit, retry an assistant reply) land without a schema rewrite.
 
@@ -163,30 +166,50 @@ If the session is soft-deleted or owned by another user, return 404.
 
 ### API Surface
 
-| Path | Method | Auth | Purpose |
-| --- | --- | --- | --- |
-| `/chat-sessions` | GET | required | List the authed user's sessions, most-recently-active first. |
-| `/chat-sessions` | POST | required | Create a new (empty) session. Body: `{ id }`. Evicts the oldest session when at cap. |
-| `/chat-sessions/{id}` | GET | required | Return the session + all its messages. 404 on miss / soft-delete / other user. |
-| `/chat-sessions/{id}` | DELETE | required | Soft-delete the session. |
-| `/chat-sessions/{id}/messages` | POST | required | Append one turn (user + assistant rows in a single transaction). Sets the session title on the first call. |
+| Service | Path | Method | Auth | Purpose |
+| --- | --- | --- | --- | --- |
+| API | `/chat-sessions` | GET | required | List the authed user's sessions, most-recently-active first. |
+| API | `/chat-sessions` | POST | required | Create a new (empty) session. Body: `{ id }`. Evicts the oldest session when at cap. |
+| API | `/chat-sessions/{id}` | GET | required | Return the session + all its messages. 404 on miss / soft-delete / other user. |
+| API | `/chat-sessions/{id}` | PATCH | required | Update session-level fields. v1 accepts `{ title }`. |
+| API | `/chat-sessions/{id}` | DELETE | required | Soft-delete the session. |
+| API | `/chat-sessions/{id}/messages` | POST | required | Append one turn (user + assistant rows in a single transaction). |
+| Agent | `/title` | POST | required | Synchronous (non-streaming) call. Takes a short message array, returns a 3–6 word title via Haiku. See Title generation. |
 
-No new endpoints on the agent. The agent's `/chat` continues to accept a `messages: [...]` array and stream a reply.
+The agent's existing `/chat` endpoint is unchanged — still accepts `messages: [...]` and streams a reply. `/title` is the only new agent endpoint.
 
-### Algorithms
+### Title generation
 
-Title generation is intentionally dumb:
+Titles are produced by Haiku via a new lightweight endpoint on the agent. The full flow per fresh session:
 
+1. Client calls `POST /chat-sessions` → empty session, `title = ""`.
+2. User sends first turn; client streams against agent `/chat`; stream completes.
+3. Client appends the turn via `POST /chat-sessions/{id}/messages`. Title still empty.
+4. **Async, fire-and-forget:** client calls agent `POST /title` with the just-completed turn as input.
+5. Agent calls Haiku with a tight system prompt — "Summarize the user's request in 3–6 words. Output only the title, no quotes, no trailing punctuation." — and returns the result.
+6. Client `PATCH /chat-sessions/{id}` with the returned title.
+7. UI either optimistically renders the title locally or refetches the session.
+
+The agent endpoint is **synchronous and non-streaming** (single Haiku call, no tools, ~1s p95). Auth is the user's existing JWT — same `RequireUser` middleware the agent already enforces on `/chat`. Body shape mirrors the chat request:
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "How was last week's volume?" },
+    { "role": "assistant", "content": "Looks like 4 sessions, 12k total reps..." }
+  ]
+}
 ```
-title = firstUserMessage.trimSpace().truncate(60).trimSpace()
-```
 
-Edge cases handled:
+Response: `{ "title": "Last week's training volume" }`.
 
-- Empty user message after trimming → fall back to `"New chat"`.
-- Truncation lands mid-word → accept it; no fancy word-boundary handling for v1.
+**Model choice.** Haiku is the right tradeoff: titles are short and the prompt is small, so generation finishes in ~500–1000ms. Cost is fractions of a cent per title; even at 50 sessions × user × month it's negligible. Sonnet would be overkill.
 
-An LLM-generated title (e.g. "ask Claude to summarize the conversation in four words") is more reader-friendly but adds an extra round-trip and per-session cost. Not worth it for v1 when the user's first message is usually self-explanatory.
+**Length cap.** The agent enforces the same `1 ≤ len(title) ≤ 80` cap on output the API's PATCH enforces on input. If Haiku emits anything longer (rare), agent truncates at 80 chars before returning.
+
+**Fallback.** If the agent's `/title` call fails for any reason (timeout, Haiku error, network blip), the client falls back to a simple `firstUserMessage.trim().slice(0, 60).trim()` title and PATCHes that. The session always ends up with a non-empty title within one turn — the fallback just means it's the dumb version. Empty user message after trim → `"New chat"` as a last-resort default.
+
+**When NOT to call.** The title call only fires after the **first** turn of a fresh session. Resuming an existing session never triggers it; the title is set once and stays. (Regeneration is an Open Question — see below.)
 
 ### Backfill or Migration
 
@@ -196,9 +219,10 @@ If/when we ever want to retroactively snapshot live conversations into history w
 
 ### Web client changes (`prog-strength-web`)
 
-- `app/(app)/chat/page.tsx` — the existing chat page. Two changes:
+- `app/(app)/chat/page.tsx` — the existing chat page. Three changes:
   - On mount, generate a UUIDv4 client-side and `POST /chat-sessions` to mint a session (or load an existing one if the URL is `/chat?session=<id>`). Render the existing UI either against the new empty session or against the rehydrated message history.
   - After each completed stream, `POST /chat-sessions/{id}/messages` with the user + assistant pair. Failures surface inline; the message stays visible regardless so the user isn't punished for a transient write.
+  - **First turn only:** after the message append resolves, fire a background call to the agent's `/title` with the just-completed turn, then `PATCH /chat-sessions/{id}` with the returned title. Both calls are best-effort — failures fall back to a trimmed first-user-message slice and surface no UI error. The history list rerenders the title in place when the PATCH lands.
 - A new history panel — likely a drawer / overlay opened from a sidebar "Chat history" entry (or a "Sessions" button in the chat page header, exact placement is a UX call) that hits `GET /chat-sessions` and renders the list. Tapping a row → `/chat?session=<id>`. A small ✕ on each row deletes (with a confirm).
 - Sidebar entry for "Chat history" alongside the existing "Chat" entry.
 
@@ -207,6 +231,7 @@ If/when we ever want to retroactively snapshot live conversations into history w
 - `app/(tabs)/chat.tsx` — same shape as web:
   - Generate UUID + create session on mount (or load by id when arriving via the history screen).
   - After each completed stream, POST the turn.
+  - First turn only: background `/title` call followed by `PATCH /chat-sessions/{id}` — same flow as web, same fallback.
 - A new `app/(tabs)/chat/history.tsx` route pushed onto the chat tab's stack. Header button on the main chat screen ("History" / clock icon) → pushes the history screen. Each row pushes back onto chat with the selected session.
 - "New chat" affordance — header button or fab. Same UUID + create flow as initial mount.
 
@@ -237,4 +262,5 @@ Frontend pruning is purely cosmetic — the API caps at 50 so the UI never needs
 2. **Where does the history list live on web — a drawer, a dropdown, or its own route?** A drawer keeps it overlaid on the chat surface (less navigation friction). A dropdown is more compact but limits the row count visible at once. A dedicated `/chat/history` route makes the URL meaningful (shareable by the user to themselves across devices). Tentative lean: dedicated `/chat/history` route with a "Recent" dropdown on the main chat page as a quick-jump shortcut — both ergonomics, neither expensive.
 3. **What happens when the user picks a history entry mid-stream of a current conversation?** Option A: confirm dialog ("Switching will abandon the in-progress reply. Continue?"). Option B: silently abandon — the stream's already going to be lost on navigation anyway. Tentative lean: silent abandon; the agent reply isn't persisted until the stream completes, and the user clicking a history row is unambiguous intent.
 4. **Should the eviction cap be configurable per user?** A "Pro" tier could plausibly raise it. v1 hardcodes 50 as a constant in the chat package; the cap moves to a per-user column or a config table if/when there's a billing tier that depends on it. Tentative lean: hardcoded for v1, no per-user override yet.
-5. **Title regeneration on edit?** If the user's first message was "hi" and the assistant asks "what would you like to know?" and then the real question comes in turn 2, the title is "hi" forever. We could re-derive the title from the first non-trivial message, or expose a manual rename. Tentative lean: leave the dumb title alone for v1, surface manual rename as a small follow-up.
+5. **Client orchestrates the title call, or agent writes directly to the API?** Client-orchestrated (chat → POST messages → POST /title → PATCH session) keeps each service single-purpose and avoids a new service-to-service auth path. Agent-writes-directly is one fewer client roundtrip but requires the agent to authenticate against the API (currently no such relationship) and adds cross-service coupling. Tentative lean: client orchestrates for v1; revisit if the title roundtrip becomes a real UX latency issue (unlikely with Haiku — ~1s end-to-end fire-and-forget).
+6. **Title regeneration mid-conversation?** A session that starts with "hi" but pivots to a deadlift question by turn 3 keeps its turn-1 title. Re-calling `/title` after every Nth turn would give a more accurate label but adds steady-state cost (every active session pings Haiku again) and surprises the user with a moving title in the history list. Tentative lean: generate once after turn 1 and leave it alone in v1. Add manual rename as a small follow-up (a text-edit modal that PATCHes the title) if users start asking; that's also the escape hatch for "the auto-generated title is wrong".
