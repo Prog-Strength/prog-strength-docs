@@ -1,6 +1,6 @@
 # Daily Macro Goals
 
-**Status**: Draft · **Last updated**: 2026-05-30
+**Status**: Implemented (pre-deploy) · **Last updated**: 2026-05-31
 
 ## Introduction
 
