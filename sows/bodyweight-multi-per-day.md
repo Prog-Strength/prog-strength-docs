@@ -1,6 +1,6 @@
 # Bodyweight: Multiple Measurements Per Day + Page Redesign
 
-**Status**: Draft · **Last updated**: 2026-05-31
+**Status**: Implemented (pre-deploy) · **Last updated**: 2026-05-31
 
 ## Introduction
 
