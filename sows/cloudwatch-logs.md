@@ -1,6 +1,6 @@
 # Centralize Container Logs in CloudWatch
 
-**Status**: Implemented (pre-deploy) · **Last updated**: 2026-05-31
+**Status**: Shipped · **Last updated**: 2026-05-31
 
 ## Introduction
 

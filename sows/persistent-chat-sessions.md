@@ -1,6 +1,6 @@
 # Persistent Chat Sessions
 
-**Status**: Draft · **Last updated**: 2026-05-30
+**Status**: Shipped · **Last updated**: 2026-05-31
 
 ## Introduction
 
