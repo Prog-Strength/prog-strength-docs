@@ -6,7 +6,7 @@
 
 `prog-strength-web` and `prog-strength-mobile` each maintain their own ~1100-line `lib/api.ts` with identical TypeScript types and `fetch`-based functions against the **Prog Strength** Go API. Every backend change — a new endpoint, a tweaked response shape, an added field — requires two parallel edits in two repos, with no compile-time guarantee that the two clients stay in sync.
 
-The original mobile rollout (`initial-mobile-app-implementation.md`) chose this duplication deliberately, on the rationale that "two consumers, contracts change slowly, single shared package introduces tooling friction that doesn't pay for itself for a single-developer beta." That trade-off has reversed: backend velocity has grown enough that the "edit twice" discipline now costs more per change than a shared package would. With a third client (`prog-strength-developer`) plausibly on the horizon, a third edit site is unacceptable.
+The original mobile rollout (`initial-mobile-app-implementation.md`) chose this duplication deliberately, on the rationale that "two consumers, contracts change slowly, single shared package introduces tooling friction that doesn't pay for itself for a single-developer beta." That trade-off has reversed: backend velocity has grown enough that the "edit twice" discipline now costs more per change than a shared package would. Two clients with redundant API code is already friction worth removing — no third consumer is needed to justify the change.
 
 This SOW introduces `prog-strength-sdk`, a new TypeScript-only repo under the Prog-Strength organization that owns the shared client surface. Both web and mobile consume it as a single source of truth, and the duplicated `lib/api.ts` files are deleted at the end of the rollout.
 
@@ -40,7 +40,7 @@ What stays out of scope: `auth.ts`, `agent.ts`, `stream.ts`, `config.ts`, and `s
 - Refactoring token storage or refresh in either client. The SDK calls a per-client `getToken()` callback; everything around it stays as-is.
 - Publishing to the public npm registry. Git-tag installs only.
 - Generating types from the Go API source or an OpenAPI spec. Worth doing eventually; not now.
-- Adding `prog-strength-developer` (or any third client) as a consumer.
+- Adding any consumer beyond `prog-strength-web` and `prog-strength-mobile`. The SDK exists to deduplicate the two frontend clients; the developer / agent / MCP repos are not target consumers and do not influence the SDK's design.
 - Cutting `v1.0.0`. The SDK stays in the 0.x series for the duration of pre-launch.
 - Backend API changes. Same Go endpoints, same JWT auth, same `{service, message, data}` envelope.
 - Adding integration tests against a live API or any new automated tests in `prog-strength-web` / `prog-strength-mobile`.
@@ -254,4 +254,3 @@ A `CLAUDE.md` lands in the new repo at PR 1 capturing the architectural decision
 
 1. **Should the Client expose a generic escape hatch** (e.g., `client.request('/some/path', { method, body })`) for endpoints not yet wrapped by a typed method? Options: (a) yes — adds flexibility when a one-off API call is needed before an SDK release; (b) no — every endpoint becomes a typed method, and the commit → tag → bump loop is fast enough to absorb. Tentative lean: (b). A generic escape hatch erodes the type safety the SDK exists to provide.
 2. **Where does generated-from-Go type emission eventually live?** Options: (a) the API repo emits TS types as a release artifact and the SDK consumes them as a build input; (b) the SDK owns codegen as a script that pulls from the API repo; (c) `prog-strength-data` becomes the canonical shared-type source. Tentative lean: (a) — keeps the Go contract authoritative and the SDK passive. Out of scope for this SOW; tracked separately.
-3. **Will `prog-strength-developer` eventually consume the SDK?** Options: yes / no / partial. Tentative lean: yes — the developer repo is the natural third consumer when its API surface materializes, which confirms the "SDK" naming is forward-looking and correct.
