@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-mcp
@@ -11,7 +11,7 @@ repos:
 
 # Nutrition Log Timezone Awareness and Server-Side Aggregation
 
-**Status**: Ready for Implementation · **Last updated**: 2026-06-03
+**Status**: Shipped · **Last updated**: 2026-06-03
 
 ## Introduction
 
