@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Workouts Analytics Views
 
-**Status**: Proposed · **Last updated**: 2026-06-02
+**Status**: Shipped · **Last updated**: 2026-06-02
 
 ## Introduction
 
