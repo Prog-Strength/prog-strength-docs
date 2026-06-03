@@ -1,6 +1,15 @@
+---
+status: ready_for_implementation
+repos:
+  - prog-strength-sdk
+  - prog-strength-web
+  - prog-strength-mobile
+  - prog-strength-docs
+---
+
 # Shared TypeScript Client SDK (prog-strength-sdk)
 
-**Status**: Draft · **Last updated**: 2026-06-02
+**Status**: Ready for Implementation · **Last updated**: 2026-06-02
 
 ## Introduction
 
