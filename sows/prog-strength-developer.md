@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-developer
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Prog Strength Developer
 
-**Status**: Proposed · **Last updated**: 2026-06-02
+**Status**: Shipped · **Last updated**: 2026-06-02
 
 ## Introduction
 
@@ -66,12 +66,12 @@ Access to the running worker for live debugging uses AWS Systems Manager Session
 - Configure access to the worker via AWS Systems Manager Session Manager (no SSH, no port 22 exposed).
 - Apply a 6-hour wall-clock backstop via systemd timer that terminates the instance regardless of Claude's state.
 - Write a one-time bootstrap runbook in `prog-strength-developer/docs/setup.md` covering: GitHub App creation, Secrets Manager seeding (Claude creds, App private key), AWS credentials for the GitHub Action, initial `terraform apply` of the persistent resources (VPC, IAM role, security group, Secrets Manager entries, GitHub Actions OIDC trust).
+- After implementation PRs are opened, open an additional pull request in `prog-strength-docs` (always, regardless of whether the SOW listed it under `repos:`) that flips the SOW's frontmatter `status:` to `shipped`, body `**Status**:` to `Shipped`, and `**Last updated**:` to the run date. Merging that PR is the owner's one-action signal that the work is complete — no manual SOW editing required.
 
 ### Non-Goals
 
 - **Notifications (Slack / email / SMS) on run completion or failure.** The PR list and CloudWatch console are the v1 signal. Notifications are a clean follow-up once the system has run a few times and we know what content is useful in them.
 - **Auto-discovery of SOWs from `prog-strength-docs`.** The worker does not scan for status-flagged SOWs; the owner explicitly dispatches by path. This avoids ambiguity ("which one should I pick?") and makes the kickoff fully deterministic.
-- **Auto-update of SOW status after completion.** The worker does not flip `status: ready_for_implementation` to `status: shipped` on the source SOW. That's left as a manual editorial step (or a future follow-up) since the line between "PR opened" and "shipped" is human-judgment-shaped.
 - **Concurrent workers.** v1 strictly serializes runs. If the owner dispatches while one is in flight, the workflow fails with a clear message. Concurrency is a defer-until-actually-needed item — the failure mode of "branch name collision in 3 repos at once" is annoying enough that getting it right deserves a separate, focused round.
 - **A queue for dispatch attempts during in-flight runs.** Closely related to concurrency. v1 returns "busy, try again" rather than queuing.
 - **A web UI or dashboard for the autonomous developer.** The GitHub Actions UI is the dispatch surface; the GitHub PR list is the output surface; the AWS console (CloudWatch + EC2) is the debugging surface. No bespoke UI.
