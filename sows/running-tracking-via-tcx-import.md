@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-infra
   - prog-strength-api
@@ -9,7 +9,7 @@ repos:
 
 # Running Tracking via Garmin TCX Import
 
-**Status**: Draft · **Last updated**: 2026-06-06
+**Status**: Shipped · **Last updated**: 2026-06-06
 
 ## Introduction
 
