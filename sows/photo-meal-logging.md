@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 depends_on:
   - sows/custom-meals.md
 repos:
@@ -11,7 +11,7 @@ repos:
 
 # Photo Meal Logging
 
-**Status**: Ready for Implementation · **Last updated**: 2026-06-05
+**Status**: Shipped · **Last updated**: 2026-06-06
 
 ## Introduction
 
