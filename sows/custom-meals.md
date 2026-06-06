@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-mcp
@@ -10,7 +10,7 @@ repos:
 
 # Custom Meals
 
-**Status**: Ready for Implementation · **Last updated**: 2026-06-05
+**Status**: Shipped · **Last updated**: 2026-06-06
 
 ## Introduction
 
