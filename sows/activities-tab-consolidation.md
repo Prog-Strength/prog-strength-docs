@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Activities Tab: Consolidate Workouts + Running + Overview
 
-**Status**: Ready for Implementation · **Last updated**: 2026-06-08
+**Status**: Shipped · **Last updated**: 2026-06-09
 
 ## Introduction
 
