@@ -1,8 +1,21 @@
+---
+status: draft
+repos:
+  - prog-strength-docs
+  # Add every repo this SOW will touch. The `dispatch-sow.yml` worker
+  # in prog-strength-developer clones from this list — omission means
+  # the repo isn't available to the autonomous worker at all, and
+  # dispatch fails if the list is empty or the frontmatter is missing.
+  # Pick from: prog-strength-api, prog-strength-mcp, prog-strength-agent,
+  # prog-strength-web, prog-strength-mobile, prog-strength-infra,
+  # prog-strength-sdk, prog-strength-developer.
+---
+
 # <Feature Title>
 
 **Status**: Draft · **Last updated**: YYYY-MM-DD
 
-> Replace the title above with the feature name. Update `Status` (`Draft` → `In Review` → `Approved` → `Shipped`) and `Last updated` as the document evolves. Each blockquote below is a prompt — read it, write the section, then delete the prompt.
+> Replace the title above with the feature name. Update `Status` (`Draft` → `In Review` → `Approved` → `Shipped`) and `Last updated` as the document evolves. Update the `status:` frontmatter field alongside the body `**Status**` line. Each blockquote below is a prompt — read it, write the section, then delete the prompt. Do not delete the frontmatter block above the title — it's required for autonomous dispatch (see AGENTS.md § Frontmatter).
 
 ## Introduction
 

@@ -1,3 +1,12 @@
+---
+status: draft
+repos:
+  - prog-strength-api
+  - prog-strength-agent
+  - prog-strength-web
+  - prog-strength-docs
+---
+
 # Per-User Daily Usage Cap — Bound External API Cost Per User
 
 **Status**: Draft · **Last updated**: 2026-06-09
