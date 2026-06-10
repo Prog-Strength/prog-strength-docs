@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Progress Page Modernization
 
-**Status**: Draft · **Last updated**: 2026-06-09
+**Status**: Shipped · **Last updated**: 2026-06-10
 
 ## Introduction
 
