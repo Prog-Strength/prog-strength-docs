@@ -40,3 +40,8 @@ repos:
 Existing SOWs are not retroactively annotated; only SOWs scheduled for autonomous re-runs need frontmatter. Anything already `Status: Shipped` can stay as-is.
 
 See `sows/prog-strength-developer.md` for the SOW that introduces this convention.
+
+## Architecture Diagram
+
+<img width="1689" height="1201" alt="prog-strength-architecture" src="https://github.com/user-attachments/assets/5bb132cb-8d3d-4b15-8878-fb4e98e259d2" />
+
