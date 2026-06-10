@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-agent
@@ -10,7 +10,7 @@ repos:
 
 # User Profile & Preferences
 
-**Status**: Ready for Implementation · **Last updated**: 2026-06-09
+**Status**: Shipped · **Last updated**: 2026-06-10
 
 ## Introduction
 
