@@ -45,3 +45,5 @@ See `sows/prog-strength-developer.md` for the SOW that introduces this conventio
 
 <img width="1689" height="1201" alt="prog-strength-architecture" src="https://github.com/user-attachments/assets/5bb132cb-8d3d-4b15-8878-fb4e98e259d2" />
 
+> Source of truth: [`prog-strength-architecture.drawio`](prog-strength-architecture.drawio) — open in [draw.io](https://app.diagrams.net) to edit. After changing the source, re-export the PNG and update the embed above so the rendered image stays in sync with the XML.
+
