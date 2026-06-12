@@ -53,6 +53,29 @@ Implemented over one day across six repos. PRs, in merge order:
 
 **Outstanding at ship time:** FatSecret + USDA keys not yet registered (lookup serves 503 `lookup_unavailable` in prod; the agent estimates, as designed); no eval baseline published yet — the first `publish_baseline` dispatch should run once provider keys exist so the baseline captures the lookup-enabled stack; open questions 2 (FatSecret attribution placement), 3 (verdict noise thresholds), and 4 (dataset staleness policy) remain open.
 
+## Post-ship session (same day, 2026-06-12): operationalization and hardening
+
+The hours after shipping turned the lookup path from "merged" into a verified, observable production service — and each instrumentation layer caught a real defect the same night it landed. PRs in landing order:
+
+| PR | Contents | Released as |
+|---|---|---|
+| agent#10 | **Prompt caching**: two `cache_control` breakpoints in the harness (tools array; composed system prompt) — ~60–85% input-token cost reduction for chat and evals; router/title prompts deliberately uncached (below minimum cacheable length) | agent v0.21.0 |
+| infra#30, #32 | Daily AI usage cap raised 0.17 → 0.33 → **0.67/day (~$20/user/month)** after the owner hit the cap twice under normal use; to be revisited against `cache_read_tokens` telemetry now that caching is live | compose tunable |
+| api#24, infra#31 | **Request-correlated structured logging** for the lookup path: the repo's first `log/slog` adopter (owner-approved exception to the deferred list) — JSON records auto-stamped with the `requestid` middleware's correlation id, new `LOG_LEVEL` config (prod ships debug during development) | api v0.46.0 |
+| api#25 | **Deploy parity fix**: `manual-deploy.yml` rewrites the host `.env` wholesale but had never been given the provider secrets — manual deploys clobbered what `release.yml` set, taking the providers dark ten minutes after they first went live. Lockstep warning comments added on both workflows | no release (ci) |
+| mcp#5, agent#11 | **End-to-end request tracing**: the API's `X-Request-ID` rides the lookup tool result (success and error shapes) and surfaces on the `tool_result` SSE event — browser DevTools → CloudWatch `filter request_id` for agent-driven lookups | mcp + agent releases |
+| api#26, infra#33 | **Metrics + dashboard**: five `api_nutrition_lookup_*` Prometheus series (request outcomes, cache events, cache writes, provider calls by source/result, provider latency histogram) feeding the dedicated `ps-nutrition-lookup` Grafana dashboard with warning/critical thresholds (cache hit rate 60/25%, provider failure 5/25%, lookup failure 1/10%, latency 2s/5s) | api v0.47.x |
+| docs#40 | Architecture diagram: FatSecret + USDA join External Services, `nutrition_lookup_cache` named on the data layer, API box gains its lookup role and the "sole caller of external data APIs" boundary rule; README now points at the `.drawio` source of truth | — |
+
+**Debugging story worth keeping** (the observability stack validated itself the night it shipped): the first live lookup returned `lookup_unavailable` despite org secrets existing. The frontend `request_id` → CloudWatch trace showed `provider skipped: not configured` — *never tried*, not *tried and rejected* — which eliminated both the FatSecret IP-allowlist theory and an org-secret-visibility theory in one read, and the deploy timeline pinned the real cause: the manual-deploy `.env` clobbering (api#25 above). Lookups were then verified live end-to-end: providers serving, cache hitting on repeat queries, dashboard rendering.
+
+**Process lessons, encoded as guardrails:**
+- agent#8's squash merge silently skipped its release (non-conventional PR title) → conventional-title checks + the agent repo's first AGENTS.md (agent#9), remedied via an empty `feat:` commit (→ v0.20.0). mcp#4 had the same latent problem and was retitled pre-merge.
+- api#26's own title then tripped the lowercase-subject rule on a leading proper noun ("Prometheus") — and exposed that the api repo's title check doesn't re-run on `edited` events (manual rerun required; the agent repo's newer check listens for `edited`).
+- The dashboard didn't appear after infra#33 merged: monitoring-only infra merges have **no deploy path of their own** — the host's infra checkout only pulls as a side effect of a service deploy (a four-minute race in this case). Fixed manually; a `sync-monitoring.yml` (push to main touching `monitoring/**` → SSH `git pull`) is the proposed permanent fix, not yet built.
+
+**Status after the session:** provider keys live (org secrets, public-repo visibility), lookup verified in production, tracing and dashboard operational. Still open: the first `publish_baseline` eval dispatch (deliberate full-cost run, now that it would capture the lookup-enabled stack), `sync-monitoring.yml`, FatSecret attribution placement, verdict-noise thresholds, dataset staleness policy.
+
 ## Introduction
 
 When a user tells the **Prog Strength** agent "log 10 chicken minis from Chick-fil-A," the macros that land in their nutrition log are invented by the LLM from memory. The custom-meal path (`prompt.py:78-104`) instructs the model to "call log_custom_meal with a best-estimate of the macros" — and because `log_nutrition` turns classify to the simple tier, that estimate usually comes from Haiku, the weakest model in the stack for world knowledge about restaurant nutrition. There is no lookup tool, no external nutrition database, and no web access anywhere in the agent or MCP. The numbers are a guess, the guess is made by the cheapest model, and nothing measures how good or bad the guesses are.
