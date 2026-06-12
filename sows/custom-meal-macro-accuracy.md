@@ -12,6 +12,16 @@ repos:
 
 **Status**: Draft · **Last updated**: 2026-06-11
 
+> **Revision (2026-06-12):** eval cost policy tightened after the first live
+> CI run tripped Anthropic rate limits and burned tokens on a pay-per-token
+> budget. Eval runs are now **strictly opt-in** (an `eval:run` PR label or a
+> manual `workflow_dispatch` in `prog-strength-agent` only), default to a
+> curated 24-case **smoke subset × 1 trial** (~95% fewer LLM trials), and the
+> mcp/api per-PR caller workflows and the inline-baseline re-run were removed.
+> The full 77-case × 3-trial run is reserved for explicitly-requested
+> baseline publishes. The cross-repo reusable-workflow shape can return if
+> per-ref evals ever become worth their spend.
+>
 > **Revision (2026-06-11):** the nutrition lookup implementation moved from
 > `prog-strength-mcp` to `prog-strength-api` after first-draft review. The MCP
 > server stays a transparent forwarder (its design contract); the Go API owns
@@ -40,7 +50,7 @@ After this work ships:
 
 The work lands in three phases, deliberately ordered so measurement exists before the things being measured change.
 
-**Phase 1 — eval harness + CI/PR integration.** A new `evals/` package in `prog-strength-agent` holds a golden dataset (~75–100 meal descriptions with published ground-truth macros, spanning chain-restaurant, packaged, and generic/homemade categories) and a runner that drives the real production pipeline: the **actual Go API binary** (hermetic: temp SQLite file + a test `JWT_SIGNING_KEY` — verified that the API requires nothing else to boot), the real MCP server pointed at it, and the real router + harness. Each (case, trial) mints its own JWT (the API trusts the `sub` claim statelessly), so trials run concurrently and the runner reads what the agent actually logged straight out of the temp SQLite database. Per-case scoring is absolute percentage error per macro; aggregates roll up per category. A reusable GitHub Actions workflow runs the eval on PRs in all three repos, compares against the latest `main` baseline, and upserts a sticky PR comment with the results table and a regression/improvement verdict.
+**Phase 1 — eval harness + CI/PR integration.** A new `evals/` package in `prog-strength-agent` holds a golden dataset (~75–100 meal descriptions with published ground-truth macros, spanning chain-restaurant, packaged, and generic/homemade categories) and a runner that drives the real production pipeline: the **actual Go API binary** (hermetic: temp SQLite file + a test `JWT_SIGNING_KEY` — verified that the API requires nothing else to boot), the real MCP server pointed at it, and the real router + harness. Each (case, trial) mints its own JWT (the API trusts the `sub` claim statelessly), so trials run concurrently and the runner reads what the agent actually logged straight out of the temp SQLite database. Per-case scoring is absolute percentage error per macro; aggregates roll up per category. A single opt-in GitHub Actions workflow (label- or dispatch-triggered; smoke subset by default) compares against the latest published baseline and upserts a sticky PR comment with the results table and a regression/improvement verdict — every run spends real tokens, so nothing triggers automatically.
 
 **Phase 2 — nutrition lookup in the Go API, forwarded by MCP.** The architecture rule this phase establishes: *LLM-provider SDKs (Anthropic, OpenAI) live in the agent; every other external integration lives in the Go API; the MCP server holds no business logic.* Concretely:
 
@@ -63,7 +73,7 @@ Community MCP servers for USDA data exist (asachs01/nutrition-mcp, neonwatty/foo
 
 - Build a golden eval dataset of ~75–100 custom-meal cases with published ground-truth macros across three categories: `chain` (restaurant menu items), `packaged` (branded grocery items), `generic` (homemade/unbranded descriptions).
 - Build an eval runner in `prog-strength-agent/evals/` that exercises the real router → harness → MCP → **real Go API** pipeline (temp SQLite, per-trial minted JWTs), captures the macros the agent actually logs by reading the database, and scores them against ground truth (absolute % error per macro, median over N trials per case).
-- Run the eval automatically on pull requests in `prog-strength-agent`, `prog-strength-mcp`, **and `prog-strength-api`** via one reusable GitHub Actions workflow; post/update a single sticky PR comment per PR with: per-category accuracy, deltas versus the `main` baseline, a clear improved/regressed/neutral verdict, and a collapsible per-case detail section.
+- Make eval runs available on demand with **zero automatic token spend**: a single workflow in `prog-strength-agent` triggered by an `eval:run` PR label or manual `workflow_dispatch`; PR runs default to the 24-case smoke subset × 1 trial and post/update one sticky comment (per-category accuracy, deltas vs the published baseline restricted to the same cases, improved/regressed/neutral verdict, collapsible failures).
 - Record a durable history of eval results on `main` so the accuracy track record outlives individual PRs.
 - Add an `internal/nutritionlookup` domain to `prog-strength-api`: FatSecret + USDA FDC providers behind a provider interface, merge/quantity-scale service, macro plausibility warnings (4·protein + 4·carbs + 9·fat vs stated calories), and an auth-gated `GET /nutrition/lookup` endpoint.
 - Add a **durable `nutrition_lookup_cache` SQLite table** with: normalized-query keying shared across all users, a freshness TTL (serve from cache when fresh; re-pull from providers when stale), stale-fallback when providers fail, `last_used_at` tracking, and opportunistic eviction of long-unused rows so the table stays bounded without a background job.
@@ -207,15 +217,15 @@ Because the real lookup endpoint (and its durable cache) sits inside the eval lo
 
 Median APE per macro across trials; case passes when median calorie APE ≤ tolerance and the agent logged in a majority of trials; composite = mean of per-category pass rates; verdict thresholds ±3 composite points pending observed variance; `<!-- macro-eval -->` sticky comment; `eval-baseline` artifact published on `main` pushes; `evals/history.jsonl` appended with `chore(eval): … [skip ci]` commits.
 
-#### CI / PR integration — revised: three repos
+#### CI / PR integration — revised again: opt-in, smoke-first
 
-`eval-reusable.yml` (in `prog-strength-agent`) gains an `api_ref` input and a Go toolchain step (`actions/setup-go`, `go build` of the api checkout). Callers:
+One self-contained workflow in `prog-strength-agent` (`eval.yml`); the reusable workflow and the mcp/api callers were removed for cost and simplicity.
 
-- `prog-strength-agent/eval.yml` — PRs (agent_ref = PR head) + main pushes (publish baseline + history).
-- `prog-strength-mcp/eval.yml` — PRs (mcp_ref = PR head).
-- `prog-strength-api/eval.yml` — PRs touching `internal/nutritionlookup/**`, `internal/nutrition/**`, or `internal/db/migrations/**` (api_ref = PR head). The lookup logic lives here now; this is where lookup regressions originate.
-
-All three repos need the `ANTHROPIC_API_KEY` secret (and optionally the provider keys). No org-level reusable-workflow setting is required — `prog-strength-agent` is public, so its reusable workflows are callable by default.
+- **Triggers**: `pull_request` gated on the `eval:run` label, and `workflow_dispatch` with `full` / `trials` / `publish_baseline` inputs. No `push` triggers anywhere — merges never spend tokens.
+- **Smoke subset**: ~24 dataset cases carry `"smoke": true` (8 per category, retaining quantity-scaling and modifier coverage). PR runs execute smoke × 1 trial at concurrency 2 (low-tier rate-limit friendly); the comparison restricts the published full baseline to the same case ids so verdicts stay apples-to-apples.
+- **Baselines**: published only by an explicit dispatch from `main` with `publish_baseline` (full dataset, 3 trials recommended) — uploads the `eval-baseline` artifact and appends `evals/history.jsonl`. No baseline → the PR comment says so; nothing re-runs (the old inline-baseline fallback, which doubled cost, is gone).
+- **Local-first loop**: `uv run python -m evals.run_eval --smoke --api-path … --mcp-path …` is the everyday iteration path; CI is for the shareable PR record.
+- mcp/api PRs no longer trigger evals; when a tool- or API-side change needs an accuracy check, label the corresponding agent PR or run a dispatch. Per-ref cross-repo evals can return later if they earn their cost.
 
 ### Phase 3: Estimation tier routing — unchanged from first draft
 
@@ -230,7 +240,7 @@ One `ROUTER_SYSTEM_PROMPT` rule classifying external-meal logging as `(log_nutri
 
 ### Rollout
 
-1. **api PR**: `internal/nutritionlookup` + migration + endpoint + config + its `eval.yml` caller. Mergeable first; the endpoint is dormant until the MCP tool points at it.
+1. **api PR**: `internal/nutritionlookup` + migration + endpoint + config. Mergeable first; the endpoint is dormant until the MCP tool points at it.
 2. **agent PR**: eval harness (real-API runner) + workflows + prompt + router rule. On merge, the first main run records baseline #1.
 3. **mcp PR**: forwarder tool + its `eval.yml` caller. Its eval comment should show the chain-category jump once provider keys are configured (the tool is the last link).
 4. **infra PR**: provider env on the api compose stack. Safe any time.
