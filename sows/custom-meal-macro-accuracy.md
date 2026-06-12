@@ -1,6 +1,7 @@
 ---
 status: draft
 repos:
+  - prog-strength-api
   - prog-strength-agent
   - prog-strength-mcp
   - prog-strength-infra
@@ -10,6 +11,15 @@ repos:
 # Custom Meal Macro Accuracy: Eval Harness, Nutrition Lookup, and Estimation Routing
 
 **Status**: Draft · **Last updated**: 2026-06-11
+
+> **Revision (2026-06-11):** the nutrition lookup implementation moved from
+> `prog-strength-mcp` to `prog-strength-api` after first-draft review. The MCP
+> server stays a transparent forwarder (its design contract); the Go API owns
+> all external-API integration and gains a durable `nutrition_lookup_cache`
+> SQLite table with a freshness/eviction policy. The eval harness was upgraded
+> from a Python fake API to running the **real Go API** so lookup + cache code
+> is exercised end-to-end. Tool surface, prompts, dataset, and scoring are
+> unchanged from the first draft.
 
 ## Introduction
 
@@ -21,194 +31,217 @@ The deeper problem is that we can't even say *how wrong* the agent is, or whethe
 
 After this work ships:
 
-1. **A macro-accuracy eval harness exists** with a golden dataset of real meals and published ground-truth macros, runnable locally and in CI.
-2. **Every pull request to `prog-strength-agent` and `prog-strength-mcp` gets a sticky PR comment** showing estimation accuracy for the PR's code versus the `main` baseline — an explicit, persistent track record of whether each change made the agent better or worse at this job.
-3. **The agent grounds custom-meal macros in real data** via a new `lookup_food_nutrition` MCP tool backed by FatSecret (restaurant + branded foods, free tier) with USDA FoodData Central as the generic-foods fallback, falling back to LLM estimation only when lookup misses.
+1. **A macro-accuracy eval harness exists** with a golden dataset of real meals and published ground-truth macros, runnable locally and in CI against the real API + MCP + agent pipeline.
+2. **Every pull request to `prog-strength-agent`, `prog-strength-mcp`, and `prog-strength-api` gets a sticky PR comment** showing estimation accuracy for the PR's code versus the `main` baseline — an explicit, persistent track record of whether each change made the agent better or worse at this job.
+3. **The agent grounds custom-meal macros in real data**: the Go API owns a nutrition lookup service backed by FatSecret (restaurant + branded foods, free tier) and USDA FoodData Central (generic foods), fronted by a durable SQLite cache; the MCP server exposes it as a `lookup_food_nutrition` tool that is — like every other tool — a transparent forwarder. The agent falls back to LLM estimation only when lookup misses.
 4. **True no-data estimation routes to the complex tier**, so when the agent must guess, the strongest available model does the guessing.
 
 ## Proposed Solution
 
 The work lands in three phases, deliberately ordered so measurement exists before the things being measured change.
 
-**Phase 1 — eval harness + CI/PR integration.** A new `evals/` package in `prog-strength-agent` holds a golden dataset (~75–100 meal descriptions with published ground-truth macros, spanning chain-restaurant, packaged, and generic/homemade categories) and a runner that drives the real agent pipeline — router, system prompt, harness, MCP tools — against a local fake Prog Strength API that records what the agent logs. Per-case scoring is absolute percentage error per macro; aggregates roll up per category. A reusable GitHub Actions workflow runs the eval on PRs in both repos, compares against the latest `main` baseline, and upserts a sticky PR comment with the results table and a regression/improvement verdict.
+**Phase 1 — eval harness + CI/PR integration.** A new `evals/` package in `prog-strength-agent` holds a golden dataset (~75–100 meal descriptions with published ground-truth macros, spanning chain-restaurant, packaged, and generic/homemade categories) and a runner that drives the real production pipeline: the **actual Go API binary** (hermetic: temp SQLite file + a test `JWT_SIGNING_KEY` — verified that the API requires nothing else to boot), the real MCP server pointed at it, and the real router + harness. Each (case, trial) mints its own JWT (the API trusts the `sub` claim statelessly), so trials run concurrently and the runner reads what the agent actually logged straight out of the temp SQLite database. Per-case scoring is absolute percentage error per macro; aggregates roll up per category. A reusable GitHub Actions workflow runs the eval on PRs in all three repos, compares against the latest `main` baseline, and upserts a sticky PR comment with the results table and a regression/improvement verdict.
 
-**Phase 2 — `lookup_food_nutrition` MCP tool.** A new tool in `prog-strength-mcp` that searches FatSecret Platform (Basic/free tier: US dataset, restaurant and branded foods, 5,000 calls/day) and falls back to USDA FoodData Central (free, authoritative for generic and homemade foods). The tool returns candidate matches with per-serving macros and a computed total for the requested quantity — multiplication happens in code, not in the model. The agent's custom-meal prompt section is rewritten: lookup first, copy the numbers, state the source and assumptions in the reply, estimate only when lookup returns nothing usable.
+**Phase 2 — nutrition lookup in the Go API, forwarded by MCP.** The architecture rule this phase establishes: *LLM-provider SDKs (Anthropic, OpenAI) live in the agent; every other external integration lives in the Go API; the MCP server holds no business logic.* Concretely:
+
+- `prog-strength-api` gains an `internal/nutritionlookup` domain: FatSecret Platform provider (Basic/free tier: US restaurant + branded foods, OAuth2 client-credentials), USDA FoodData Central provider (free, generic/homemade foods), a merge/scale service, and an auth-gated `GET /nutrition/lookup` endpoint. Quantity math happens in Go — the model copies totals, it never multiplies.
+- A **durable `nutrition_lookup_cache` table** fronts the providers: cache hits skip the external round trip entirely (fast lookups, quota protection), a freshness TTL forces periodic re-pull so reformulated foods don't serve stale macros forever, and an opportunistic eviction sweep bounds table growth. Stale data is still served (flagged) when providers are down — resilience over purity.
+- `prog-strength-mcp`'s `lookup_food_nutrition` tool becomes a thin forwarder — pull the Authorization header, call the API, adapt errors — exactly the shape of every sibling tool.
+- The agent's custom-meal prompt section is rewritten: lookup first, copy the numbers, state the source and assumptions in the reply, estimate only when lookup returns nothing usable.
+
+This placement also means the web app and mobile app can call `GET /nutrition/lookup` directly later (a "search nutrition database" affordance in Quick Add becomes a frontend-only change), and FatSecret's 5,000 calls/day quota is guarded by one shared cache instead of one per process.
 
 **Phase 3 — estimation tier routing.** The router prompt gains a rule: a meal-logging turn that references an external food source (chain name, "from <place>", ordering/buying language) classifies as `complex` tier. With Phase 2 landed this mostly matters for lookup misses — the model copying tool output doesn't need to be smart, but the model inventing numbers does. Phase 1's eval quantifies whether this routing change pays for its latency/cost before it ships as default.
 
-The phases are separately shippable and the eval gates each one: Phase 1's first run records today's baseline; Phase 2 and 3 each have to beat it in their own PR comment to merge. That is the whole point of the ordering.
+The phases are separately shippable and the eval gates each one: Phase 1's first run records today's baseline; Phase 2 and 3 each have to beat it in their own PR comment to merge.
 
-Community MCP servers for USDA data exist (asachs01/nutrition-mcp, neonwatty/food-tracker-mcp, FelipeAdachi/mcp-food-data-central) and were evaluated; none are deployed here. They are USDA-only — which misses the chain-restaurant case entirely — and several bundle their own meal-logging/SQLite state that would overlap confusingly with the existing `log_custom_meal` → Go API flow. One thin tool inside the existing MCP server keeps a single agent/data boundary, reuses the deployed process, and stays vendor-swappable behind env config.
+Community MCP servers for USDA data exist (asachs01/nutrition-mcp, neonwatty/food-tracker-mcp, FelipeAdachi/mcp-food-data-central) and were evaluated; none are deployed here. They are USDA-only — which misses the chain-restaurant case entirely — and several bundle their own meal-logging/SQLite state that would overlap confusingly with the existing `log_custom_meal` → Go API flow. Owning the integration in the Go API keeps a single boundary, one durable cache, and vendor-swappable providers behind env config.
 
 ## Goals and Non-Goals
 
 ### Goals
 
 - Build a golden eval dataset of ~75–100 custom-meal cases with published ground-truth macros across three categories: `chain` (restaurant menu items), `packaged` (branded grocery items), `generic` (homemade/unbranded descriptions).
-- Build an eval runner in `prog-strength-agent/evals/` that exercises the real router → harness → MCP → (fake) API pipeline, captures the macros the agent actually logs, and scores them against ground truth (absolute % error per macro, median over N trials per case).
-- Run the eval automatically on pull requests in **both** `prog-strength-agent` and `prog-strength-mcp` via one reusable GitHub Actions workflow; post/update a single sticky PR comment per PR with: per-category accuracy, deltas versus the `main` baseline, a clear improved/regressed/neutral verdict, and a collapsible per-case detail section.
+- Build an eval runner in `prog-strength-agent/evals/` that exercises the real router → harness → MCP → **real Go API** pipeline (temp SQLite, per-trial minted JWTs), captures the macros the agent actually logs by reading the database, and scores them against ground truth (absolute % error per macro, median over N trials per case).
+- Run the eval automatically on pull requests in `prog-strength-agent`, `prog-strength-mcp`, **and `prog-strength-api`** via one reusable GitHub Actions workflow; post/update a single sticky PR comment per PR with: per-category accuracy, deltas versus the `main` baseline, a clear improved/regressed/neutral verdict, and a collapsible per-case detail section.
 - Record a durable history of eval results on `main` so the accuracy track record outlives individual PRs.
-- Add a `lookup_food_nutrition` MCP tool backed by FatSecret Platform (primary: restaurant + branded) and USDA FoodData Central (fallback: generic), with quantity math computed in code and a `source` field on every result.
+- Add an `internal/nutritionlookup` domain to `prog-strength-api`: FatSecret + USDA FDC providers behind a provider interface, merge/quantity-scale service, macro plausibility warnings (4·protein + 4·carbs + 9·fat vs stated calories), and an auth-gated `GET /nutrition/lookup` endpoint.
+- Add a **durable `nutrition_lookup_cache` SQLite table** with: normalized-query keying shared across all users, a freshness TTL (serve from cache when fresh; re-pull from providers when stale), stale-fallback when providers fail, `last_used_at` tracking, and opportunistic eviction of long-unused rows so the table stays bounded without a background job.
+- Reduce `prog-strength-mcp`'s `lookup_food_nutrition` to a transparent forwarder over the new endpoint — identical tool name, parameters, and result shape, so agent prompts and the eval dataset are unaffected by the relocation.
 - Update the agent system prompt's custom-meal section: lookup before estimating, cite the source and per-item assumption in the reply, estimate only on lookup miss, keep the existing "offer to save to pantry" follow-up.
-- Add a macro plausibility check to the lookup tool results and the agent prompt (4·protein + 4·carbs + 9·fat should approximate calories) so internally-inconsistent numbers get flagged before logging.
 - Route external-meal estimation turns to the complex tier via a router prompt rule, gated on the eval showing a measurable win.
-- Keep the system fully functional with no external nutrition keys configured: the tool reports "lookup unavailable" and the agent falls back to today's estimate-from-knowledge behavior.
+- Keep the system fully functional with no external nutrition keys configured: the endpoint reports lookup-unavailable, the tool forwards that, and the agent falls back to today's estimate-from-knowledge behavior.
 
 ### Non-Goals
 
-- **Nutritionix or other paid nutrition APIs.** Best-in-class restaurant coverage, but enterprise pricing (~$1,850/month) is absurd at this project's scale. The tool's interface (query in, candidates with source out) is vendor-shaped so a future swap is config + one client module, not a redesign.
+- **Nutritionix or other paid nutrition APIs.** Best-in-class restaurant coverage, but enterprise pricing (~$1,850/month) is absurd at this project's scale. The provider interface in `internal/nutritionlookup` is the swap seam if that calculus ever changes.
 - **Anthropic server-side web search as a lookup mechanism in this SOW.** It's the natural *next* fallback for long-tail misses (local restaurants, regional chains), but it adds per-search cost, latency, and nondeterminism. The eval harness this SOW ships is exactly the instrument that will tell us whether the residual miss rate justifies it. Revisit after Phase 2 data exists.
-- **Improving photo-based meal estimation.** The receipt/plate-photo flow (`prompt.py:91-104`) has its own failure modes (portion estimation from pixels) that lookup doesn't address. The eval dataset is text-only in v1; a vision eval category is a natural follow-up.
+- **A user-facing lookup UI in web/mobile.** The endpoint is deliberately client-agnostic and auth-gated so a Quick Add "search nutrition database" affordance becomes a small frontend-only follow-up — but that UI is not this SOW.
+- **Improving photo-based meal estimation.** The receipt/plate-photo flow has its own failure modes (portion estimation from pixels) that lookup doesn't address. The eval dataset is text-only in v1; a vision eval category is a natural follow-up.
 - **Backfilling or correcting previously-logged custom meals.** Macros are frozen at log time by design; this SOW improves future logs only.
-- **An eval that scores conversation quality, tool-call efficiency, or anything beyond macro accuracy.** The harness is built so new scorers can be added (the runner already captures full transcripts), but v1 scores macros. Expanding the eval as the agent gets smarter is the explicitly-intended follow-on work, not this SOW.
-- **Web-app changes.** The `log_custom_meal` schema is unchanged; entries flow into the existing nutrition log UI untouched. (A "source: FatSecret" badge in the log UI is a possible later nicety.)
-- **Caching nutrition lookups in the Go API / shared database.** v1 uses an in-process TTL cache in the MCP server, which is sufficient for one deployed instance and 5k calls/day headroom. A shared verified-foods table is premature.
-- **Blocking merges on eval regressions.** The PR comment is informational, not a required check, in v1. LLM evals are noisy; making them merge-blocking before we understand run-to-run variance would manufacture false-positive friction. Revisit once variance data from a few weeks of PRs exists.
+- **An eval that scores conversation quality, tool-call efficiency, or anything beyond macro accuracy.** The harness captures full transcripts so new scorers can be added later; v1 scores macros.
+- **A "verified foods" curation workflow on top of the cache.** The cache table is raw provider output keyed by query. Promoting cache rows into a curated, user-visible verified-foods catalog (with admin review) is a plausible future; the schema doesn't preclude it and this SOW doesn't build it.
+- **Blocking merges on eval regressions.** The PR comment is informational, not a required check, in v1. LLM evals are noisy; thresholds get tuned against observed variance from `history.jsonl` first.
+- **A background cache-eviction job.** Eviction is opportunistic (piggybacked on lookups). At this project's scale a scheduled sweeper is machinery without a payoff; revisit if the table ever measurably matters.
 
 ## Implementation Details
 
-### Phase 1: Eval harness
+### Phase 2: Nutrition lookup (described first — the API surface the eval exercises)
 
-#### Dataset
+#### `prog-strength-api`: `internal/nutritionlookup` domain
 
-`prog-strength-agent/evals/dataset/custom_meals.json` — an array of cases:
+Follows the standard domain layout (`handler.go`, `repository.go`, `sqlite_repository.go`, `memory_repository.go`, models, tests):
 
-```json
-{
-  "id": "cfa-chicken-minis-10",
-  "category": "chain",
-  "message": "log 10 chicken minis from chick fil a for breakfast",
-  "expect": { "calories": 910, "protein_g": 50, "fat_g": 41, "carbs_g": 84 },
-  "tolerance_pct": 15,
-  "source": "https://www.chick-fil-a.com/nutrition (per mini: 91 cal)",
-  "notes": "quantity-scaling case: per-item macros x 10"
+- **Providers** (`fatsecret.go`, `usda.go`) behind a small interface:
+
+  ```go
+  type Provider interface {
+      Source() string
+      Configured() bool
+      Search(ctx context.Context, query string, limit int) ([]Candidate, error)
+  }
+  ```
+
+  *FatSecret*: OAuth2 client-credentials against `oauth.fatsecret.com/connect/token` (token cached in-process until shortly before expiry), then `foods.search` via `platform.fatsecret.com/rest/server.api`. Macros are parsed from the documented `food_description` format ("Per 1 sandwich - Calories: 440kcal | Fat: 19.00g | …") — one HTTP round trip per lookup instead of N+1 `food.get` calls; candidates with unparseable descriptions are skipped, never guessed. Handles the single-result dict-not-list JSON quirk.
+
+  *USDA FDC*: `GET api.nal.usda.gov/fdc/v1/foods/search` across all data types. Search-response nutrients are per-100g; Branded rows with a gram/ml label serving are scaled to that serving (with `householdServingFullText` as the serving description); rows missing protein/fat/carbs are dropped.
+
+  Both use a shared `http.Client` with an ~8s timeout — a slow third party must not stall the agent's tool loop indefinitely.
+
+- **Candidate shape** (JSON, the contract the MCP tool and agent prompt already use — unchanged from the first draft):
+
+  ```json
+  {
+    "name": "Chick-n-Minis (4 Count)", "brand": "Chick-fil-A",
+    "serving_description": "4 minis",
+    "per_serving": {"calories": 360, "protein_g": 19, "fat_g": 13, "carbs_g": 41},
+    "total_for_quantity": {"calories": 900, "...": "..."},
+    "source": "fatsecret", "source_id": "12345",
+    "plausibility_warning": "<set when 4P+4C+9F diverges >25% from stated calories>",
+    "stale": false
+  }
+  ```
+
+  `per_serving` keeps two decimals (it gets multiplied); `total_for_quantity` is computed in Go and rounded to one.
+
+- **Service** (`service.go`): cache-first lookup → provider merge (FatSecret first; USDA appended when FatSecret returns fewer than `max_results`) → quantity scaling → plausibility flags. Provider errors degrade: one provider down → results from the other; all down with no cache → structured failure; all down with a stale cache row → serve stale, flagged.
+
+#### Durable cache: `nutrition_lookup_cache`
+
+Migration `018_nutrition_lookup_cache.sql`:
+
+```sql
+-- Durable cache of external nutrition lookups (FatSecret / USDA).
+-- Global, NOT per-user: food data is public, the FatSecret quota is
+-- shared, and a global key maximizes hit rate. Rows store per-serving
+-- candidates as JSON; quantity scaling happens at read time.
+CREATE TABLE IF NOT EXISTS nutrition_lookup_cache (
+    query_normalized TEXT PRIMARY KEY,   -- lower-cased, whitespace-collapsed
+    candidates_json  TEXT NOT NULL,      -- []Candidate, per-serving values
+    fetched_at       DATETIME NOT NULL,  -- last successful provider pull
+    last_used_at     DATETIME NOT NULL   -- last cache read (eviction signal)
+);
+
+CREATE INDEX idx_nutrition_lookup_cache_last_used
+    ON nutrition_lookup_cache(last_used_at);
+```
+
+**Freshness policy:** a row younger than the freshness TTL (`fetched_at` within **7 days**) serves directly — no external call, sub-millisecond lookups for repeat foods. Older rows trigger a provider re-pull; success overwrites the row (`fetched_at` resets), failure serves the stale row with `"stale": true` on each candidate so the agent can mention it. The 7-day constant lives in code, not env — same philosophy as `auth.JWTLifetime` (changing data-freshness semantics should be a reviewable code change).
+
+**Eviction policy:** every cache write piggybacks a sweep: `DELETE FROM nutrition_lookup_cache WHERE last_used_at < now - 90 days`. Foods the user actually eats stay hot forever (each hit bumps `last_used_at` and each TTL re-pull refreshes the data); one-off lookups age out. No background job, no unbounded growth, and the 90-day constant is likewise code-pinned.
+
+Repository interface:
+
+```go
+type Repository interface {
+    Get(ctx context.Context, queryNormalized string) (*CacheRow, error) // bumps last_used_at
+    Put(ctx context.Context, row CacheRow) error                        // upsert + eviction sweep
 }
 ```
 
-Composition targets: ~40 `chain` cases across the majors (Chick-fil-A, Chipotle, McDonald's, Subway, Starbucks, Taco Bell, Domino's…), weighted toward quantity-scaling and modifier phrasing ("no rice", "double meat") since that's where pure estimation falls apart; ~20 `packaged` cases (branded bars, frozen meals, drinks with label data); ~25 `generic` cases ("two scrambled eggs and a slice of buttered toast") with USDA FNDDS-derived ground truth. Every case records its source URL so ground truth is auditable and refreshable when chains reformulate.
+`memory_repository.go` mirrors it for in-memory mode (`DATABASE_URL` empty), where the cache is simply non-durable.
 
-Ground truth is curated by hand once, with published-source values, and checked in. Chains reformulate rarely; a `verified_at` date per case plus an open question below covers staleness.
+#### Endpoint
 
-#### Runner
+`GET /nutrition/lookup?query=<food>&quantity=<n>&max_results=<m>` mounted inside the existing `auth.RequireUser` group (public food data, but the endpoint spends shared provider quota — gating it keeps anonymous internet traffic off the FatSecret budget). Params: `query` required (≤200 chars), `quantity` optional float > 0 (default 1), `max_results` optional 1–10 (default 5).
 
-`prog-strength-agent/evals/run_eval.py`, invoked as `uv run python -m evals.run_eval --dataset evals/dataset/custom_meals.json --trials 3 --out eval-results.json`.
+Responses use the API's standard envelope:
 
-Per case, the runner drives the **real pipeline**: `ModelRouter.route()` on the case message, then the selected harness's tool-use loop with a live MCP session — the same code path production `/chat` takes, minus the FastAPI layer. Two test doubles make this hermetic:
+- `200` — `data: {"matches": [...], "quantity": n}` (matches may be empty).
+- `503` — `error: "lookup_unavailable: no nutrition data providers configured"` (no keys) or `error: "lookup_failed: <provider detail>"` (all providers down, no cache). 503 is honest REST for "dependency down"; the MCP forwarder adapts it (below).
+- `400` — malformed params.
 
-- **Fake Prog Strength API** — a small in-process FastAPI app (pattern already exists in the MCP test suite's `respx` fixtures, promoted here to a live uvicorn-on-localhost stub) that serves an empty pantry and recipes list (forcing the custom-meal path) and records every `POST /nutrition/log/custom` payload. The recorded payload IS the eval observation.
-- **Real MCP server** — launched as a subprocess from a configurable checkout path (`--mcp-path`), pointed at the fake API. This is what lets `prog-strength-mcp` PRs run the same eval against *their* changed tool code, including the Phase 2 lookup tool. External nutrition APIs are hit live when keys are configured (see Open Questions for the recorded-fixture alternative).
+Config additions (`internal/config`): `FATSECRET_CLIENT_ID`, `FATSECRET_CLIENT_SECRET`, `USDA_FDC_API_KEY` — all optional, mirroring `AvatarBucketName`'s "absent = feature degrades with a clear message" pattern.
 
-Scoring per case: absolute percentage error per macro between the logged values and `expect`, median across `--trials` runs (default 3) to damp LLM nondeterminism. A case **passes** when calories land within `tolerance_pct` (default ±15%). Aggregates per category and overall: median APE per macro, pass rate, and a single composite score (mean of per-category pass rates, so the small `packaged` category isn't drowned out). Cases where the agent never called `log_custom_meal` (asked a question instead, refused, errored) score as failures with a distinct `no_log` flag — an agent that stops logging is a regression even if its numbers would have been accurate.
+#### `prog-strength-mcp`: thin forwarder
 
-Output: `eval-results.json` (full per-case, per-trial detail) plus a rendered `eval-summary.md` used verbatim as the PR comment body.
+The `lookup_food_nutrition` tool keeps its exact name, parameters, and docstring (the agent prompt is written against them) but its body becomes the standard forwarder shape: `_auth_header_or_raise()` → `api.lookup_food_nutrition(auth, query=…, quantity=…, max_results=…)` → return `data`. A 503 from the API is adapted into the structured `{"error": "lookup_unavailable" | "lookup_failed", "detail": …}` dict the agent prompt already handles — tool contract identical to the first draft, so nothing downstream of the MCP boundary changes. No provider code, no cache, no new config or secrets in the MCP server.
 
-Estimated cost per full run: ~100 cases × 3 trials × (1 Haiku router call + 1–3 harness calls) — single-digit dollars on the current model mix. Cheap enough to run on every PR; the path filters below keep it from running on README typos.
+#### Deployment (`prog-strength-infra` + api deploy workflow)
 
-#### CI / PR integration
+The three provider env vars thread through the **api** repo's deploy workflow into `compose/api`'s `.env` (not the mcp stack). All optional; empty values deploy fine.
 
-One reusable workflow owns the logic; both repos invoke it.
+#### Prompt changes (`prog-strength-agent`) — unchanged from first draft
 
-**`prog-strength-agent/.github/workflows/eval-reusable.yml`** (`workflow_call`):
+Lookup-first ordering, copy `total_for_quantity` verbatim ("never re-multiply"), prefer warning-free candidates, cite source + per-serving assumption in the reply, estimate only on miss and say so, save-to-pantry ask seeded with looked-up per-serving macros. Matching one-line nudge in the `log_nutrition` intent rules.
 
-```yaml
-inputs:
-  agent_ref: { type: string, default: main }
-  mcp_ref:   { type: string, default: main }
-secrets:
-  ANTHROPIC_API_KEY: { required: true }
-  FATSECRET_CLIENT_ID: { required: false }
-  FATSECRET_CLIENT_SECRET: { required: false }
-  USDA_FDC_API_KEY: { required: false }
-```
+### Phase 1: Eval harness
 
-Steps: check out `prog-strength-agent@agent_ref` and `prog-strength-mcp@mcp_ref` side by side; `uv sync` both; run the eval; download the most recent successful `main` baseline artifact (`gh api /repos/Prog-Strength/prog-strength-agent/actions/artifacts?name=eval-baseline`); render the comparison; upload `eval-results.json` as an artifact. If no baseline artifact exists (first run, or >90-day artifact expiry), run the eval a second time at `main` refs inline and use that as the baseline — slower but self-healing.
+#### Dataset — unchanged from first draft
 
-**`prog-strength-agent/.github/workflows/eval.yml`**: `pull_request` trigger with path filters (`src/**`, `evals/**`, `pyproject.toml`), calls the reusable workflow with `agent_ref: ${{ github.event.pull_request.head.sha }}`; plus a `push: branches [main]` trigger that runs the eval and uploads the `eval-baseline` artifact and appends one summary line to the history record (below).
+`prog-strength-agent/evals/dataset/custom_meals.json`: ~75–100 cases across `chain`/`packaged`/`generic` with published ground truth, per-case `tolerance_pct`, auditable `source` URLs, and `verified_at` dates. Weighted toward quantity-scaling and modifier phrasing.
 
-**`prog-strength-mcp/.github/workflows/eval.yml`**: `pull_request` trigger with path filters (`src/**`, `pyproject.toml`), calls `Prog-Strength/prog-strength-agent/.github/workflows/eval-reusable.yml@main` with `mcp_ref: ${{ github.event.pull_request.head.sha }}`. Requires the org setting allowing private-repo reusable workflows across the org, and `ANTHROPIC_API_KEY` (plus optional nutrition keys) added to the MCP repo's secrets.
+#### Runner — revised: real API, not a fake
 
-Concurrency group per PR with `cancel-in-progress: true` so rapid pushes don't stack paid eval runs. An `eval:skip` PR label short-circuits the job for changes the author knows are irrelevant.
+`evals/run_eval.py` stands up the production stack hermetically:
 
-**PR comment.** Upserted sticky comment keyed on a `<!-- macro-eval -->` marker (find-and-update via `gh api`, same pattern as popular sticky-comment actions, vendored as a ~30-line script step so there's no third-party action dependency):
+1. **Real Go API**: `go build ./cmd/api` from a `--api-path` checkout, run with `DATABASE_URL=<tmpdir>/eval.db`, `JWT_SIGNING_KEY=<eval secret>`, `SERVER_ADDR=127.0.0.1:<port>`, and any provider keys forwarded from the environment. Verified boot surface: the API requires only the signing key; OAuth/Google config is optional and unmounted when absent.
+2. **Real MCP server**: `uv run --project <--mcp-path>` with `PROG_STRENGTH_API_BASE_URL` pointed at the eval API.
+3. **Real router + harnesses**: the same `ModelRouter`/`ModelHarness` classes production `/chat` uses.
 
-```
-## 🧪 Macro estimation eval
+Per (case, trial), the runner **mints a JWT** with `sub = eval-<case>-t<n>` (pyjwt, HS256 — the API's auth is stateless and trusts the subject claim, and nutrition rows have no FK to the users table, so no user bootstrapping is needed). The unique subject is the correlation id: after the trial drains the SSE stream, the runner reads that subject's rows directly from the temp SQLite database (`nutrition_log_entries WHERE user_id = ?`) and scores custom-meal entries against ground truth. An empty pantry falls out naturally from the empty database. Multiple custom entries in one trial are summed; zero entries is the `no_log` failure mode.
 
-**Verdict: ✅ improved** (composite 71 → 78, threshold ±3)
+Because the real lookup endpoint (and its durable cache) sits inside the eval loop, the eval measures the true production path — including cache-hit behavior on later trials of the same case, which is representative, since real users repeat foods.
 
-| Category | Cases | Pass rate | Δ vs main | Cal MAPE | Δ | P/F/C MAPE |
-|----------|------:|----------:|----------:|---------:|--:|-----------:|
-| chain    | 40    | 75%       | +10pp     | 11%      | −6pp | 14% / 19% / 16% |
-| packaged | 20    | 85%       | +5pp      | 8%       | −2pp | 10% / 12% / 11% |
-| generic  | 25    | 72%       | ±0pp      | 13%      | ±0pp | 15% / 21% / 18% |
+#### Scoring, comparison, sticky comment, history — unchanged from first draft
 
-<details><summary>12 failing cases</summary> … per-case table … </details>
+Median APE per macro across trials; case passes when median calorie APE ≤ tolerance and the agent logged in a majority of trials; composite = mean of per-category pass rates; verdict thresholds ±3 composite points pending observed variance; `<!-- macro-eval -->` sticky comment; `eval-baseline` artifact published on `main` pushes; `evals/history.jsonl` appended with `chore(eval): … [skip ci]` commits.
 
-Baseline: main@a1b2c3 (run 2026-06-12) · 3 trials/case · details in workflow artifacts
-```
+#### CI / PR integration — revised: three repos
 
-The verdict thresholds (±3 composite points, ±5pp category pass rate) start as informed guesses and get tuned against observed trial variance — the first few weeks of runs ARE the variance study. Verdict is one of ✅ improved / ❌ regressed / ➖ no significant change, with ❌ never blocking merge in v1 (see Non-Goals).
+`eval-reusable.yml` (in `prog-strength-agent`) gains an `api_ref` input and a Go toolchain step (`actions/setup-go`, `go build` of the api checkout). Callers:
 
-**History.** The `main`-push job appends one JSON line (date, sha, composite, per-category pass rates) to `evals/history.jsonl` and commits it back with a `chore(eval): record results for <sha>` message — conventional-commit `chore` so semantic-release ignores it. This file is the long-lived track record the PR comments individually can't provide, and it's greppable/plottable when the eval inevitably grows new categories.
+- `prog-strength-agent/eval.yml` — PRs (agent_ref = PR head) + main pushes (publish baseline + history).
+- `prog-strength-mcp/eval.yml` — PRs (mcp_ref = PR head).
+- `prog-strength-api/eval.yml` — PRs touching `internal/nutritionlookup/**`, `internal/nutrition/**`, or `internal/db/migrations/**` (api_ref = PR head). The lookup logic lives here now; this is where lookup regressions originate.
 
-### Phase 2: `lookup_food_nutrition` MCP tool
+All three repos need the `ANTHROPIC_API_KEY` secret (and optionally the provider keys). No org-level reusable-workflow setting is required — `prog-strength-agent` is public, so its reusable workflows are callable by default.
 
-#### Tool surface
+### Phase 3: Estimation tier routing — unchanged from first draft
 
-New tool in `prog-strength-mcp` alongside the existing nutrition tools:
-
-```python
-@mcp.tool
-async def lookup_food_nutrition(
-    query: str,          # "Chick-fil-A chicken minis", "Fage 2% greek yogurt"
-    quantity: float = 1, # items/servings the user consumed
-    max_results: int = 5,
-) -> list[FoodMatch]
-```
-
-`FoodMatch`: `{name, brand, serving_description, per_serving: {calories, protein_g, fat_g, carbs_g}, total_for_quantity: {…}, source: "fatsecret" | "usda", source_id}`. `total_for_quantity` is computed in the tool — the ×10 multiplication for chicken minis happens in Python, not in a model that flubs arithmetic. A `plausibility_warning` field is set when 4·P + 4·C + 9·F diverges from stated calories by >25% (some sources have entry errors; the agent is told to prefer candidates without warnings).
-
-#### Providers
-
-- **FatSecret Platform, Basic edition** (primary): free, 5,000 calls/day, US dataset including restaurant and branded foods, OAuth2 client-credentials flow (`foods.search` → `food.get.v4`). Attribution required on the Basic tier — see Open Questions.
-- **USDA FoodData Central** (fallback, and primary for generic-food queries): free API key, `/v1/foods/search` across FNDDS/Foundation/Branded data types. Authoritative for "two scrambled eggs" but nearly useless for "chicken minis."
-
-Provider modules live behind a common `NutritionProvider` protocol in `mcp/nutrition_lookup/` so the FatSecret→Nutritionix-someday swap is one module. Results merge: FatSecret first, USDA appended when FatSecret returns < `max_results` or the query looks generic (no brand-shaped token). An in-process TTL cache (24h, keyed on normalized query) keeps repeat lookups off the daily quota.
-
-Config (`mcp/config.py`): `FATSECRET_CLIENT_ID`, `FATSECRET_CLIENT_SECRET`, `USDA_FDC_API_KEY` — all optional. With neither configured the tool returns a structured `{"error": "lookup_unavailable"}` and the agent prompt covers the fallback. Deployment: secrets added to the MCP repo's deploy workflow and the `compose/mcp` env in `prog-strength-infra`, mirroring how `ANTHROPIC_API_KEY` flows to the agent today.
-
-#### Prompt changes (`prog-strength-agent/src/prog_strength_agent/prompt.py`)
-
-The custom-meal paragraph is rewritten. New behavior, in order: (1) pantry/recipe match as today; (2) on miss with external-meal wording, call `lookup_food_nutrition` with the food noun and quantity; (3) pick the best candidate (prefer exact brand match, no plausibility warning), call `log_custom_meal` with `total_for_quantity`, and say in the reply where the numbers came from — *"Logged 10 chicken minis — 910 cal (Chick-fil-A via FatSecret, 91 cal each)"*; (4) only when lookup returns nothing usable, estimate from knowledge as today, conservative-high, and *say it's an estimate*; (5) keep the existing "save to pantry?" follow-up, now seeded with looked-up (not hallucinated) per-serving macros. The `log_nutrition` intent rules block in `intents.py` gets a matching one-line nudge.
-
-`tests/test_prompt.py` gains assertions that the lookup-first instruction and the cite-your-source instruction survive prompt composition, mirroring the existing custom-meal prompt tests.
-
-### Phase 3: Estimation tier routing
-
-`ROUTER_SYSTEM_PROMPT` (`model_router.py:48-66`) gains one rule: meal-logging messages that reference an external source (chain/restaurant name, "from <place>", "ordered/bought/picked up") classify as `(log_nutrition, complex)`. Rationale: when lookup misses, the macros come from model knowledge, and Sonnet's knowledge measurably beats Haiku's; when lookup hits, the complex model costs a little more to copy numbers — acceptable for the minority of turns this rule catches.
-
-This ships **only if** the eval shows it: Phase 3 is a one-line PR whose own sticky comment must show the win. If Phase 2's lookup coverage turns out high enough that routing adds cost without moving the composite, the PR gets closed with the data attached — which is precisely the workflow this SOW exists to enable.
+One `ROUTER_SYSTEM_PROMPT` rule classifying external-meal logging as `(log_nutrition, complex)`; ships only if its own eval comment shows the win.
 
 ### Testing
 
-- **Eval harness unit tests** (`prog-strength-agent/tests/test_evals.py`): scorer math (APE, medians, pass thresholds, `no_log` handling), dataset schema validation (every case has positive macros, valid category, source URL), comparison/verdict rendering against fixture result files.
-- **MCP lookup tool tests** (`prog-strength-mcp/tests/test_nutrition_lookup.py`): `respx`-mocked FatSecret and USDA responses; quantity scaling; provider fallback order; TTL cache behavior; plausibility-warning math; unconfigured-keys degradation; OAuth token refresh.
-- **Prompt tests** as above.
-- The eval itself is the integration test for the whole feature — that's the point of building it first.
+- **`prog-strength-api`**: provider tests against `httptest` servers (OAuth token caching, description parsing, single-result quirk, branded serving scaling, dropped-row rules); service tests (merge order, fallback, plausibility); repository tests on a migrated temp SQLite (freshness TTL respected, stale-fallback, `last_used_at` bump, eviction sweep); handler tests (param validation, 503 shapes, envelope).
+- **`prog-strength-mcp`**: forwarder tests pinning the exact query params sent and the 503 → structured-error adaptation (respx).
+- **`prog-strength-agent`**: eval scorer/dataset/compare unit tests (no LLM); prompt and router-rule assertions.
+- The eval itself is the integration test for the whole feature.
 
 ### Rollout
 
-1. **Phase 1 PR** (agent repo): dataset + runner + workflows. Its own PR can't compare against a baseline yet; the first `main` run after merge records baseline #1 — today's pure-Haiku-estimation accuracy, which immediately becomes the number to beat. Add `ANTHROPIC_API_KEY` secret to the MCP repo and flip the org reusable-workflow setting; land the MCP repo's thin `eval.yml`.
-2. **Phase 2 PRs**: MCP tool first (agent prompt unchanged — tool is inert until the prompt points at it, so the MCP PR's eval comment should read "no significant change," itself a useful null-test of comment noise), then the agent prompt PR, whose comment should show the chain-category jump. Register FatSecret + USDA keys; add secrets to both repos and infra compose.
-3. **Phase 3 PR**: router rule, merged or closed on its eval numbers.
+1. **api PR**: `internal/nutritionlookup` + migration + endpoint + config + its `eval.yml` caller. Mergeable first; the endpoint is dormant until the MCP tool points at it.
+2. **agent PR**: eval harness (real-API runner) + workflows + prompt + router rule. On merge, the first main run records baseline #1.
+3. **mcp PR**: forwarder tool + its `eval.yml` caller. Its eval comment should show the chain-category jump once provider keys are configured (the tool is the last link).
+4. **infra PR**: provider env on the api compose stack. Safe any time.
 
-No feature flags: lookup degrades to today's behavior when unconfigured, and each phase is a revertable PR with its accuracy impact documented in the PR thread.
+Secrets: `ANTHROPIC_API_KEY` on mcp + api repos (agent already has it); FatSecret + USDA keys on all three eval repos and the api deploy.
 
 ## Open Questions
 
-1. **Live external APIs in CI, or recorded fixtures?** Live FatSecret/USDA calls in eval runs test the true end-to-end path but add flake risk, quota consumption, and a secrets surface in CI. Recorded responses (cassette-style, refreshed by a scheduled weekly job) are hermetic but can mask provider drift. Recommendation: live in v1 with the 24h cache wired into the runner (one quota hit per food per day across all PRs), recorded fixtures only if flake shows up in practice.
-2. **FatSecret Basic-tier attribution.** Basic requires "Powered by fatsecret" attribution. Where does it live — agent reply text (noisy), web app footer on the nutrition page, or both? Needs a read of the actual license terms during implementation; if attribution placement is unacceptable, USDA-only still covers the `generic`/`packaged` categories and the eval will quantify exactly what the chain category loses.
-3. **Verdict noise thresholds.** ±3 composite points is a guess. After ~10 main-branch runs exist in `history.jsonl`, compute the observed run-to-run standard deviation and set thresholds at ~2σ. Until then, expect some ➖ verdicts that are really small wins.
-4. **Dataset staleness.** Chains reformulate. Proposal: `verified_at` per case plus a quarterly scheduled workflow that flags cases older than a year for re-verification. Acceptable, or overkill for v1?
-5. **Should `log_custom_meal` itself enforce the plausibility check?** A server-side reject (or warn-and-log) on 4P+4C+9F vs calories divergence would catch hallucinated macro combos from any client, not just lookup-path entries. Leaning warn-and-log (telemetry counter) in v1 — hard rejects on a heuristic risk blocking legitimate edge foods (fiber-heavy, sugar alcohols, alcohol itself at 7 cal/g).
-6. **Mobile/web Quick Add custom tab.** The web app's custom-meal form takes user-typed macros and is unaffected here, but once `lookup_food_nutrition` exists in the MCP, a "search nutrition database" affordance in the web Quick Add custom tab becomes cheap to add (new API pass-through endpoint). Separate SOW if wanted.
+1. **Live external APIs in CI, or recorded fixtures?** Live calls test the true path but add flake/quota/secret surface. The durable cache now does much of the damping (one provider pull per food per freshness window *per eval database* — though eval DBs are ephemeral, so CI still pulls each food once per run). Recommendation stands: live in v1; recorded fixtures only if flake shows up.
+2. **FatSecret Basic-tier attribution.** Basic requires "Powered by fatsecret" attribution. Where does it live — agent reply text (noisy), web app footer on the nutrition page, or both? Needs a read of the actual license terms during implementation; if placement is unacceptable, USDA-only still covers `generic`/`packaged` and the eval quantifies what `chain` loses.
+3. **Verdict noise thresholds.** ±3 composite points is a guess; recompute at ~2σ once `history.jsonl` has ~10 main-branch runs.
+4. **Dataset staleness.** `verified_at` per case plus (proposed) a quarterly scheduled workflow flagging cases older than a year. Acceptable, or overkill for v1?
+5. **Should `log_custom_meal` itself enforce the plausibility check?** Leaning warn-and-log in v1 — hard rejects on a heuristic risk blocking legitimate edge foods (fiber, sugar alcohols, alcohol at 7 cal/g).
+6. **Cache freshness TTL value.** 7 days balances "fast repeat lookups" against "reformulations propagate within a week." Restaurant items change rarely; packaged labels change occasionally. If 7 days proves chatty against the FatSecret quota, 30 days is defensible — it's a one-constant change with the eval to confirm no accuracy cost.
