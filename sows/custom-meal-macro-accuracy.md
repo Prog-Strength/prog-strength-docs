@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-agent
@@ -10,7 +10,7 @@ repos:
 
 # Custom Meal Macro Accuracy: Eval Harness, Nutrition Lookup, and Estimation Routing
 
-**Status**: Draft · **Last updated**: 2026-06-11
+**Status**: Shipped · **Last updated**: 2026-06-12
 
 > **Revision (2026-06-12):** eval cost policy tightened after the first live
 > CI run tripped Anthropic rate limits and burned tokens on a pay-per-token
@@ -30,6 +30,28 @@ repos:
 > from a Python fake API to running the **real Go API** so lookup + cache code
 > is exercised end-to-end. Tool surface, prompts, dataset, and scoring are
 > unchanged from the first draft.
+
+## Implementation record (shipped 2026-06-12)
+
+Implemented over one day across six repos. PRs, in merge order:
+
+| PR | Contents | Released as |
+|---|---|---|
+| docs#36 / #37 / #38 | SOW draft → architecture revision → cost-policy revision | — |
+| api#22 | `internal/nutritionlookup` (FatSecret + USDA providers, `GET /nutrition/lookup`), `nutrition_lookup_cache` migration 018, config, deploy secrets | api v0.45.0 (deployed) |
+| api#23 | removed the per-PR eval workflow that #22 carried (superseded by the cost policy; it referenced a deleted reusable workflow) | no release (chore) |
+| agent#8 | eval harness (dataset, real-API runner, scoring, opt-in workflow), lookup-first prompts, complex-tier routing rule | agent v0.20.0 — see finding 2 |
+| agent#9 | conventional-PR-title check + the repo's first AGENTS.md | no release (ci) |
+| mcp#4 | `lookup_food_nutrition` thin forwarder (the activation step) | mcp release on merge |
+| infra#29 | provider env vars on the api compose stack | applied at next api deploy |
+
+**Findings and deviations beyond the two pre-merge revisions above:**
+
+1. **api#22 failed its first CI run** on the conventional-title check and golangci-lint: gosec G101 false-positived on the FatSecret URL constant *names* (inline `nolint` with reasons), gosec G704 (SSRF taint) was added to the repo's documented taint-false-positive excludes alongside G701/G706/G710, and one govet `err`-shadow in a test was a genuine fix. Root cause of the misses: pre-commit hooks are per-clone opt-in and the authoring clone had none armed, plus a stale golangci-lint v1 locally. The clone's hooks are now installed, golangci-lint upgraded to CI's pinned v2.12.2, and the api AGENTS.md gained an explicit run-CI's-checks-before-authoring rule.
+2. **agent#8's squash merge silently skipped its release**: the PR title wasn't a conventional commit, semantic-release published nothing, and the prompt/routing changes sat on main undeployed. Remedied with an empty `feat(agent):` commit (→ v0.20.0); prevented by agent#9's title check (mirroring the api repo's) and AGENTS.md documentation. mcp#4 had the same latent problem and was retitled before merge.
+3. **Secrets footprint shrank with the cost policy**: only `prog-strength-agent` runs evals and it already held `ANTHROPIC_API_KEY` — no new required secrets anywhere. The FatSecret/USDA provider keys remain optional: agent repo (live lookups in evals) and api repo (production lookup via the deploy workflow).
+
+**Outstanding at ship time:** FatSecret + USDA keys not yet registered (lookup serves 503 `lookup_unavailable` in prod; the agent estimates, as designed); no eval baseline published yet — the first `publish_baseline` dispatch should run once provider keys exist so the baseline captures the lookup-enabled stack; open questions 2 (FatSecret attribution placement), 3 (verdict noise thresholds), and 4 (dataset staleness policy) remain open.
 
 ## Introduction
 
@@ -245,7 +267,7 @@ One `ROUTER_SYSTEM_PROMPT` rule classifying external-meal logging as `(log_nutri
 3. **mcp PR**: forwarder tool + its `eval.yml` caller. Its eval comment should show the chain-category jump once provider keys are configured (the tool is the last link).
 4. **infra PR**: provider env on the api compose stack. Safe any time.
 
-Secrets: `ANTHROPIC_API_KEY` on mcp + api repos (agent already has it); FatSecret + USDA keys on all three eval repos and the api deploy.
+Secrets (as revised by the cost policy): no new required secrets — only the agent repo runs evals and already holds `ANTHROPIC_API_KEY`. FatSecret + USDA keys are optional, on the agent repo (eval lookups) and api repo (production deploy).
 
 ## Open Questions
 
