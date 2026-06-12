@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-docs
   - prog-strength-infra
@@ -11,7 +11,7 @@ repos:
 
 # Single GitHub Actions OIDC Role for All CI/CD
 
-**Status**: Draft · **Last updated**: 2026-06-12
+**Status**: Shipped · **Last updated**: 2026-06-12
 
 ## Introduction
 
