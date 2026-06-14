@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-mobile
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Live Workout Logging Session
 
-**Status**: Draft · **Last updated**: 2026-06-14
+**Status**: Shipped · **Last updated**: 2026-06-14
 
 ## Introduction
 
