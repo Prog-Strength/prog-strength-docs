@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-mcp
@@ -11,7 +11,7 @@ repos:
 
 # Planned Workouts & Google Calendar Sync
 
-**Status**: Proposed · **Last updated**: 2026-06-15
+**Status**: Shipped · **Last updated**: 2026-06-15
 
 ## Introduction
 
