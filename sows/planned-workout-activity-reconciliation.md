@@ -1,5 +1,5 @@
 ---
-status: draft
+status: ready_for_implementation
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Planned Workout ↔ Activity Reconciliation
 
-**Status**: Draft · **Last updated**: 2026-06-15
+**Status**: Ready for implementation · **Last updated**: 2026-06-15
 
 ## Introduction
 
