@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Followers, Profile Search & Social Timeline
 
-**Status**: Proposed · **Last updated**: 2026-06-14
+**Status**: Shipped · **Last updated**: 2026-06-15
 
 ## Introduction
 
