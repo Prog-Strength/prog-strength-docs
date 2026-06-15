@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-infra
@@ -8,7 +8,7 @@ repos:
 
 # Dynamic Beta Allowlist
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-14
+**Status**: Shipped · **Last updated**: 2026-06-15
 
 ## Introduction
 
