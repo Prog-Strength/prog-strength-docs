@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: shipped
 repos:
   - prog-strength-developer
   - prog-strength-infra
@@ -8,7 +8,7 @@ repos:
 
 # Fleet Dispatch Gating — One Worker Per SOW
 
-**Status**: Proposed · **Last updated**: 2026-06-14
+**Status**: Shipped · **Last updated**: 2026-06-15
 
 ## Introduction
 
