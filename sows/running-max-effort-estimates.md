@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-mcp
@@ -10,7 +10,7 @@ repos:
 
 # Running Max-Effort Estimates
 
-**Status**: Draft · **Last updated**: 2026-06-14
+**Status**: Shipped · **Last updated**: 2026-06-14
 
 ## Introduction
 
@@ -423,3 +423,34 @@ Records untouched, since this feature only reads existing data.
 4. **Confidence-band interval width.** What z (≈68% vs ≈90%) should the displayed band
    use? *Tentative lean:* ≈68% (one σ) for a tighter, less alarming visual, with the
    `confidence` label carrying the qualitative read. Easy to tune later.
+
+## Resolved during implementation
+
+The implementation follows the SOW closely. The decisions that were open or that
+required reconciling with the actual repo state, as shipped in v1:
+
+- **Engine home & API home.** The pure engine landed exactly as specced at
+  `internal/running/estimate/` (a brand-new package — there was no `internal/running`
+  before). The two HTTP handlers were added to the existing `internal/activity`
+  handler alongside the best-effort handlers, since the activity repository owns the
+  running data; no separate HTTP package was created.
+- **Quality signal (Open Question #2).** Shipped the ratio-only `w_quality` heuristic
+  (effort distance ÷ source-activity total distance), documented as v1 in the engine
+  README with pace-ratio noted as a fast follow. To feed it, the best-effort history
+  read (`GetRunningBestEffortHistory`) now also surfaces the source activity's total
+  distance on each point; the existing `/running/best-efforts/.../history` payload is
+  unchanged.
+- **Demographics (Open Question #1).** Lean (b): the engine, `standards.go`, and their
+  unit tests fully support an age/sex demographic level prior, but because age/sex are
+  not stored yet (deferred to `user-profile-and-preferences.md`), the v1 wiring passes
+  empty demographics, so the `β₀` prior is diffuse and the level comes entirely from the
+  user's own data. The hook is built and tested; the data is deferred.
+- **Confidence band (Open Question #4).** Displayed band uses z ≈ 1.0 (≈68%, one σ);
+  the `confidence` tier (low/medium/high) is derived from relative band width.
+- **Progress-page entry (Open Question #3).** Lean accepted: a single "Running
+  max-effort estimates" entry that lands on the user's most-run distance, with the
+  in-view switcher handling the other five.
+- **`source` label.** Each attempt's `source` is a v1 qualitative classification derived
+  from the same effort/activity distance ratio (`race_like` vs `long_run_window`).
+- **Estimator version.** Shipped as `EstimatorVersion = "1.0.0"`, returned on every
+  result and surfaced by both endpoints.
