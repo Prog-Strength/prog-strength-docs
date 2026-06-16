@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: timeline
 idioms:
   - strava-social-dashboard
@@ -22,7 +22,14 @@ repos:
 
 # DX: Timeline
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Awaiting selection · **Last updated**: 2026-06-16
+
+> The five variants are built and live on the `dx/timeline` draft PR in
+> `prog-strength-web` (`[DX — DO NOT MERGE] timeline — 5 design variants`),
+> rendered side by side at `/design-explore/timeline` behind the
+> `NEXT_PUBLIC_ENABLE_DESIGN_EXPLORE` flag. Owner: compare on the preview
+> deploy, pick a direction, tick its box, set `status: selected` (note the
+> winning idiom), and **close the PR — never merge it.**
 
 ## Context
 
