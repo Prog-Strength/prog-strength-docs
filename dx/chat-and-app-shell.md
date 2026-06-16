@@ -1,6 +1,7 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idiom: soft-modern-messenger
 surface: chat-and-app-shell
 idioms:
   - minimal-canvas
@@ -22,7 +23,20 @@ repos:
 
 # DX: Chat & App Shell
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Selected · **Last updated**: 2026-06-16
+
+> **Selected: `soft-modern-messenger`.** Picked at the selection gate from
+> [prog-strength-web#58](https://github.com/Prog-Strength/prog-strength-web/pull/58)
+> (the `[DX — DO NOT MERGE]` draft PR). At the gate two scope calls widened the
+> pick: the redesign covers the **whole app shell** (the shared sidebar, not
+> just the chat page), and it **adopts the variant's violet accent**
+> (`#8b7cf6`) as the app accent, replacing the old blue. Implementation is
+> carried by the downstream SOW
+> [`sows/chat-and-app-shell-redesign.md`](../sows/chat-and-app-shell-redesign.md),
+> which establishes the soft-modern-messenger system as app-wide design tokens,
+> restyles the shared shell, and fully realizes the chat surface. The DX branch
+> and PR #58 are disposable and can be closed/deleted now that the decision
+> lives in the SOW.
 
 ## Context
 
