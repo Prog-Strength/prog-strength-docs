@@ -10,8 +10,9 @@ This repo's job is to capture the *why* behind the work: statements of work (SOW
 
 ```
 sows/         Statements of work — one markdown file per non-trivial feature.
+dx/           Design Exploration tickets (type: dx) — one per frontend surface explored.
 plans/        Implementation plans derived from SOWs (typically YYYY-MM-DD-<slug>.md).
-templates/    Boilerplate for new docs. Always start a new SOW from templates/sow-template.md.
+templates/    Boilerplate for new docs. Start a SOW from templates/sow-template.md, a DX from templates/dx-template.md.
 ```
 
 ## Statements of Work (SOWs) — the primary artifact
@@ -40,6 +41,7 @@ repos:
 
 - `repos` is **load-bearing**. It's the clone-list the autonomous developer reads to decide which repos to check out before invoking Claude Code. Each entry must be the bare repository name in the `Prog-Strength/<name>` namespace. Inclusion is not an obligation to modify — Claude may decide a referenced repo doesn't need changes — but omission means the repo won't be available at all.
 - `status` is **informational and editorial**. `prog-strength-developer` does NOT gate dispatch on it — the owner is the gate. The body's `**Status**:` line can complement or temporarily disagree with the frontmatter during transitions.
+- `type` selects the **work type** and defaults to `sow` when absent (so every existing SOW is untouched). A `type: dx` ticket is a **Design Exploration**, not a SOW: it lives in `dx/<surface>.md` (not `sows/`), is copied from `templates/dx-template.md`, carries additional mandatory frontmatter (`surface`, `idioms`, `references`, `scope`, `variant_count`), and produces N never-merged visual variants rather than shippable code. The worker routes on `type` (see `prog-strength-developer` `bootstrap/ticket.py`) and validates DX frontmatter at boot — `idioms` shorter than `variant_count` fails dispatch fast. See [`dx/README.md`](dx/README.md).
 - Existing SOWs are **not** retroactively annotated. Add frontmatter only when a SOW is scheduled for an autonomous re-run, or when a fresh SOW is written. **A "fresh SOW" means any new file under `sows/` — there is no draft-vs-ready distinction here. Frontmatter goes in on the first commit.**
 
 Do not copy older SOWs that lack frontmatter as a template — many pre-convention SOWs are still in the repo for historical reasons; copying one is the recurring trap. Always start from `templates/sow-template.md`, which includes the frontmatter block.
