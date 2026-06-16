@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: chat-and-app-shell
 idioms:
   - minimal-canvas
@@ -22,7 +22,7 @@ repos:
 
 # DX: Chat & App Shell
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Awaiting selection · **Last updated**: 2026-06-16
 
 ## Context
 
