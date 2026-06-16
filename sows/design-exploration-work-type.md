@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-developer
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Design Exploration (DX) — A Divergent, Decision-Gated Work Type
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Shipped · **Last updated**: 2026-06-16
 
 ## Introduction
 

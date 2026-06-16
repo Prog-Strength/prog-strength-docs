@@ -8,8 +8,9 @@ Code lives in the service repos (`prog-strength-api`, `prog-strength-mcp`, `prog
 
 ```
 sows/        Statements of work — one per non-trivial feature.
+dx/          Design Exploration tickets (type: dx) — one per frontend surface explored.
 plans/       Implementation plans derived from SoWs.
-templates/   Boilerplate for new docs. Start here when adding a new SoW.
+templates/   Boilerplate for new docs. Start here when adding a new SoW or DX.
 ```
 
 ## Adding a statement of work
@@ -40,6 +41,8 @@ repos:
 Existing SOWs are not retroactively annotated; only SOWs scheduled for autonomous re-runs need frontmatter. Anything already `Status: Shipped` can stay as-is.
 
 See `sows/prog-strength-developer.md` for the SOW that introduces this convention.
+
+A `type:` field selects the **work type** (`sow` by default). A `type: dx` ticket is a **Design Exploration**: it lives in `dx/<surface>.md`, follows `templates/dx-template.md`, and produces N never-merged frontend variants for a human to pick from rather than shippable code. See [`dx/README.md`](dx/README.md) and `sows/design-exploration-work-type.md`.
 
 ## Architecture Diagram
 
