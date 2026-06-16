@@ -1,6 +1,7 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idiom: warm-organic-coaching
 surface: calendar-view
 idioms:
   - strava-airy-minimal
@@ -22,7 +23,15 @@ repos:
 
 # DX: Calendar View
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Selected · **Last updated**: 2026-06-16
+
+> **Selected: `warm-organic-coaching`.** Picked at the selection gate from
+> [prog-strength-web#56](https://github.com/Prog-Strength/prog-strength-web/pull/56)
+> (the `[DX — DO NOT MERGE]` draft PR). Implementation is carried by the
+> downstream SOW [`sows/calendar-view-redesign.md`](../sows/calendar-view-redesign.md),
+> which adopts the variant's structure and coaching feel re-toned onto the
+> existing dark theme. The DX branch and PR #56 are disposable and can be
+> closed/deleted now that the decision lives in the SOW.
 
 ## Context
 
