@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: calendar-view
 idioms:
   - strava-airy-minimal
@@ -22,7 +22,7 @@ repos:
 
 # DX: Calendar View
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Awaiting selection · **Last updated**: 2026-06-16
 
 ## Context
 
