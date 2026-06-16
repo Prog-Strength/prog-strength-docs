@@ -32,7 +32,7 @@ This SOW closes that hole and then makes profiles richer and the timeline more s
 
 ### Non-goals (deferred)
 
-- **Mobile parity** — this is web + API only. The mobile app is a separate phase.
+- **Mobile parity** — this is web + API only. Note for future planning: the mobile app currently has *none* of the social layer (no search, follow, public profiles, timeline feed, or comments — only own-profile/Settings with avatar upload). A mobile social effort therefore builds the whole stack from scratch and belongs in its own phased SOW, not here.
 - **Notifications** for new followers/comments.
 - **Handle-change UX** beyond the existing Settings editor.
 - **New graph types** beyond the two named (no PR/volume/HR graphs on profiles yet).
