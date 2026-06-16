@@ -9,7 +9,84 @@ repos:
 
 # Timeline Redesign — Strava-Social-Dashboard
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Draft (blocked — clarification needed) · **Last updated**: 2026-06-16
+
+## ⚠️ Blocking clarification needed before implementation (2026-06-16)
+
+Implementation was started and **halted at the API piece** because the SOW's
+single, central backend deliverable rests on a premise that does not hold
+against the current data model. Raising this as a draft PR rather than
+guessing at a scope the owner has not approved.
+
+### The premise that doesn't hold
+
+The SOW states the one real API change is to expose **run route geometry** —
+"a simplified (Douglas–Peucker-reduced) polyline plus bounds … **derived from
+the run's existing `trackpoints`**" — and frames it as the only gap: "What the
+chosen design actually needs that the backend lacks is the route geometry for
+run cards."
+
+But **no geographic position (latitude/longitude) is stored or even parsed
+anywhere in the stack.** The trackpoint series is a *distance / pace / heart-
+rate / elevation* stream with **no coordinates**:
+
+- **TCX parser** — `internal/activity/tcx_parser.go` (`xmlTrackpoint`,
+  `parsedTrackpoint`, lines ~32–70) decodes only `Time`, `DistanceMeters`,
+  `HeartRateBpm`, `AltitudeMeters`. The TCX `<Position>` element
+  (`<LatitudeDegrees>` / `<LongitudeDegrees>`) is **never read** — it is
+  dropped on import.
+- **Database** — `internal/db/migrations/015_activities_generalize.sql`
+  (`activity_trackpoints`, lines 79–89) has columns `elapsed_seconds`,
+  `distance_meters`, `heart_rate_bpm`, `pace_sec_per_km`, `elevation_meters`.
+  **No `latitude` / `longitude` columns.**
+- **Domain model** — `internal/activity/model.go` `Trackpoint` (lines 63–70)
+  has `Sequence`, `ElapsedSeconds`, `DistanceMeters`, `HeartRateBpm`,
+  `PaceSecPerKm`, `ElevationMeters`. **No coordinates.**
+
+A 2-D map path cannot be reconstructed from cumulative distance alone, so the
+"compact route summary" the SOW asks for **cannot be derived from existing
+data**. The raw TCX files in S3 (`TCXS3Key`) *may* contain `<Position>` for
+GPS-recorded runs, but that geometry is discarded at import and never
+persisted, and re-reading S3 per feed post is exactly the per-post S3/N+1 fan-
+out the SOW warns against.
+
+### Why this blocks rather than degrades quietly
+
+The route map is not incidental — it is the **signature element** of the
+chosen `strava-social-dashboard` design ("a prominent **route map**", "the
+Strava-signature run map", "route-forward card"). Two paths forward both need
+the owner's call:
+
+1. **Implementing route geometry for real** requires (a) extending the TCX
+   parser to capture `<Position>`, (b) a **schema migration** adding
+   `latitude` / `longitude` to `activity_trackpoints`, (c) a **backfill** that
+   re-parses every existing activity's raw TCX from S3 (stored points have no
+   position), and (d) graceful handling of runs whose TCX has no `<Position>`
+   at all (treadmill / indoor / non-GPS watches). This directly contradicts
+   the SOW's stated scope — "the only backend change", "**additive and
+   backward-compatible** (a new optional `content.route` field)", "the feed
+   aggregation … untouched", deploy-first-no-migration. It is a materially
+   larger backend effort than the SOW authorizes and needs explicit sign-off.
+
+2. **Shipping the dashboard without the route map** (token conformance, the
+   three-column layout, ActivityCards with the workout radar / milestone
+   banner / big-stat row / kudos + comment footer, the left "your week" rail,
+   and the discovery rail — everything that does *not* depend on geometry,
+   with `RouteMap` rendering a graceful "no route" state) is fully buildable
+   today and needs **no** backend change. But it drops the element the owner
+   selected this direction *for*, so it should be an explicit de-scope, not a
+   silent omission. (If chosen, the API piece in this SOW becomes a no-op and
+   should be struck.)
+
+**Recommended:** split the SOW — land **option 2** now (the dashboard rebuild
++ token conformance, route map deferred to a graceful placeholder), and spin
+**option 1** (GPS position capture: parser + migration + backfill) into its
+own backend SOW, since it is the real prerequisite for the route map and is
+out of scope for "the one real API change." Once the owner picks a path, this
+SOW can be updated and implementation resumed.
+
+No code PRs were opened in `prog-strength-api` or `prog-strength-web`; this is
+the only PR for this SOW until the scope is resolved.
 
 ## Introduction
 
