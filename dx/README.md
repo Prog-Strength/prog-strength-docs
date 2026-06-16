@@ -23,6 +23,23 @@ shippable state of its own.
    the [`Dispatch ticket`](https://github.com/Prog-Strength/prog-strength-developer/actions/workflows/dispatch-sow.yml)
    workflow in `prog-strength-developer`, passing the `dx/<surface>.md` path.
 
+## `scope:` and the design system
+
+The `scope:` field decides how a DX relates to [`../design-system.md`](../design-system.md),
+the canonical record of decided visual conventions:
+
+- **`in-system`** — every variant **uses the design system's tokens** (palette,
+  accent, type family). Variants diverge only on *layout, structure, density,
+  and composition* — they do **not** re-decide the palette/accent/type. Use this
+  for surfaces that should look native to the rest of the app.
+- **`greenfield`** — variants may explore **beyond** the system, but its **Fixed
+  Points** (the brand mark, the dark theme) still hold. Use this when you
+  genuinely want to question the current direction.
+
+The dispatch worker reads `design-system.md` and applies it per `scope`, so an
+`in-system` DX won't waste variants re-litigating choices already made. When the
+chosen variant feeds a downstream SOW, that SOW conforms to the design system too.
+
 ## Viewing the variants (one-time Vercel setup)
 
 The DX worker renders all variants on a **flag-gated** comparison route,

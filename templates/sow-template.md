@@ -16,6 +16,8 @@ repos:
 **Status**: Draft · **Last updated**: YYYY-MM-DD
 
 > Replace the title above with the feature name. Update `Status` (`Draft` → `In Review` → `Approved` → `Shipped`) and `Last updated` as the document evolves. Update the `status:` frontmatter field alongside the body `**Status**` line. Each blockquote below is a prompt — read it, write the section, then delete the prompt. Do not delete the frontmatter block above the title — it's required for autonomous dispatch (see AGENTS.md § Frontmatter).
+>
+> **Frontend SOWs conform to the design system** ([`design-system.md`](../design-system.md)): reference its tokens (palette, accent, type) instead of introducing new ones, and call out in Implementation Details where this work conforms to — or deliberately extends — it. A SOW that implements a chosen DX variant inherits that DX's `scope`.
 
 ## Introduction
 

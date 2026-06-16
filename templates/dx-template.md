@@ -12,8 +12,10 @@ references:              # North-star products that ground "good" concretely.
   - Strava               # Bare adjectives ("professional", "clean", "modern")
   - Whoop                # are banned — name products, not vibes.
   - Linear
-scope: in-system         # in-system (refine within the design system)
-                         #   | greenfield (explore beyond it)
+scope: in-system         # in-system = stay within ../design-system.md (variants
+                         #   diverge only on layout/structure/density, NOT palette/
+                         #   accent/type) | greenfield = explore beyond it (the
+                         #   design system's Fixed Points still hold)
 variant_count: 5         # default 5
 repos:
   - prog-strength-web    # the single surface repo whose UI is explored
