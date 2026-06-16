@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Social Profiles: Discovery, Bio, Graphs & Author Avatars
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-15
+**Status**: Shipped · **Last updated**: 2026-06-16
 
 ## Introduction
 
