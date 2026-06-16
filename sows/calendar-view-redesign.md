@@ -39,7 +39,7 @@ The warm accent and tonal activity hues are introduced as **named design tokens*
 - Preserve **all current functionality**: day selection, plan-a-workout (month-level and per-day), prev/next/Today navigation, the planned/clock/recurring affordances, the completed-planned merge, the day digest, and all routing.
 - Reframe the weekly summary as a **streak strip** (seven trained/untrained dots + "trained N of M days" + lift/run/steps labels), carrying the same `WeeklyStat` data the right column carries today.
 - A **coaching header**: greet by the user's real `display_name`, and summarize the month's training consistency from real event data.
-- Map activity → **tonal hue by discipline** (run vs lift today), via an extensible `Discipline` system, introduced as **named dark-theme design tokens** (warm accent + per-discipline tones).
+- Map activity → **tonal hue by discipline** (run vs lift today), via an extensible `Discipline` system, drawing on the app's **shared design tokens** — the violet accent for emphasis plus the per-discipline tones on the slate ramp (see Design tokens). No separate warm/clay accent.
 - Update the calendar component **tests** to the new structure; keep the suite green and CI's gate (`lint`, `format`, `typecheck`, `test`, `build`) passing.
 
 ### Non-Goals
@@ -54,14 +54,17 @@ The warm accent and tonal activity hues are introduced as **named design tokens*
 
 All paths are in `prog-strength-web`. Lifecycle order: tokens → data derivations → components → page composition → tests.
 
-### Design tokens (the dark-toned warm system)
+### Design tokens (conform to the app's soft-modern-messenger system)
 
-Add named CSS variables to the app's existing token system (the same place `--muted` and friends live), dark-appropriate:
+> **Palette update (2026-06-16).** This section originally introduced a warm **clay** accent on dark. Since then, [`sows/chat-and-app-shell-redesign.md`](chat-and-app-shell-redesign.md) shipped the **soft-modern-messenger** system as the app's foundational design tokens — a slate neutral ramp and a single **violet accent** (`#8b7cf6`, replacing the old blue) — which every page now inherits. To keep the app coherent (one accent, not two), the calendar **conforms to those shared tokens** rather than introducing clay. The *structure and coaching feel* (rounded per-week panels, the streak strip, the coaching header) are unchanged; only the palette is re-pointed.
 
-- A **warm accent** (the variant's clay `#cd6f3e` reads well on dark; keep or lightly tune for contrast) for actions, "today," and the streak emphasis.
-- **Per-discipline tonal hues** for `run` and `lift`, each as a `{ bg, fg, dot }` triple re-toned for a dark surface (the variant's light triples — run `#fbe6da/#b65a36/#e08a5e`, lift `#f6e7c6/#a07a2c/#d6ab54` — are the *hue* reference; pick dark-surface equivalents that hold WCAG-AA contrast for chip text). Reserve `mobility`/`core` token slots, unused for now.
+The calendar draws its accent and surfaces from the **existing shared tokens** (in `app/globals.css`) — it adds no new accent:
 
-Hard-coded hex in the calendar components is a smell — reference the tokens.
+- Use the shared **violet accent** (`var(--accent)` / `var(--accent-soft)` / `var(--accent-line)`) for actions, "today," and the streak emphasis — the same accent the shell and chat now use. Do **not** introduce a clay/warm accent; the app has one accent and it is violet.
+- Panels, day cells, and chips sit on the shared **slate ramp** (`var(--surface)` / `var(--surface-2)` / `var(--surface-3)`, hairline `var(--border)`), `var(--radius-card)` / `var(--radius-card-lg)` radii, and `var(--shadow-soft)` depth.
+- **Per-discipline tonal hues** for `run` and `lift` remain a `{ bg, fg, dot }` triple, but **re-toned to sit on the slate ramp** and hold WCAG-AA contrast for chip text. The app already ships dark-surface discipline tokens (`--discipline-run-*`, `--discipline-lift-*`, with reserved `--discipline-mobility-*` / `--discipline-core-*` slots) — reuse those rather than defining a parallel warm set. Keep `run` and `lift` visually distinct from the violet accent so activity chips don't read as "today"/action emphasis.
+
+Hard-coded hex in the calendar components is a smell — reference the shared tokens.
 
 ### Data derivations (compute from real events; no fabrication)
 
@@ -117,5 +120,6 @@ Web-only, no API or migration, no coordination window.
 
 - **Streak metric labels** — emoji (🏋/🏃/👟, as the mockup) vs the app's existing activity icons if it has a set. Match the app for consistency; cheap to settle in implementation.
 - **Month-consistency copy** — exact wording and thresholds for the encouraging line (e.g. how a low-volume month reads). Keep it honest and non-scolding; the precise sentence is an implementation detail, not a contract.
-- **Warm accent on dark** — the variant's clay `#cd6f3e` is the starting point; if it doesn't clear AA against the dark surface for text/affordances, tune the token. Visual call at implementation.
-- **Future app-wide warmth** — if the dark-toned result reads as wanting the full warm treatment, that's a design-system conversation (and likely a DS work item), not a reopen of this SOW.
+- **Accent — resolved (2026-06-16): violet, not clay.** This SOW originally proposed a warm clay accent; the app has since standardized on the shared **violet** accent (`var(--accent)`) via `sows/chat-and-app-shell-redesign.md`. The calendar uses that shared accent for "today"/streak emphasis (see Design tokens). No clay token is introduced.
+- **Discipline hues vs. the accent** — ensure the re-toned `run`/`lift` chip tones stay visually distinct from the violet accent so an activity chip never reads as the "today"/action emphasis. Visual call at implementation, using the shared `--discipline-*` tokens.
+- **Future app-wide warmth** — if a warmer direction is ever wanted, that's a design-system conversation (and likely a DS work item), not a reopen of this SOW.

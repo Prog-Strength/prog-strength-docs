@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Chat & App Shell Redesign — Soft-Modern-Messenger, App-Wide
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Shipped · **Last updated**: 2026-06-16
 
 ## Introduction
 
