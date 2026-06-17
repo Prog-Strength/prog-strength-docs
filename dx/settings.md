@@ -1,6 +1,7 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idiom: grouped-savebar
 surface: settings
 idioms:
   - linear-minimal
@@ -23,7 +24,7 @@ repos:
 
 # DX: User Settings
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Selected (`grouped-savebar`) · **Last updated**: 2026-06-17
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a SOW it does not converge on one correct implementation — it produces N differentiated visual variants of a single frontend surface, side by side on one comparison route, awaiting a human pick. It **never merges** and ships no production code; the chosen direction feeds a downstream SOW that builds it for real.
 
