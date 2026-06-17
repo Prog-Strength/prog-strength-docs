@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: landing-page
 idioms:
   - centered-hero-spotlight
@@ -23,7 +23,13 @@ repos:
 
 # DX: Landing Page
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Awaiting selection · **Last updated**: 2026-06-17
+
+> **Worker note (2026-06-17)**: All 5 variants built on branch `dx/landing-page`
+> in `prog-strength-web`, behind the `NEXT_PUBLIC_ENABLE_DESIGN_EXPLORE` flag at
+> `/design-explore/landing-page`. Draft PR open as the selection artifact — pick
+> an idiom, tick its box, set `status: selected`, and **close the PR (never
+> merge)**, then open the implementation SOW.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a SOW it does not converge on one correct implementation — it produces N differentiated visual variants of a single frontend surface, side by side on one comparison route, awaiting a human pick. It **never merges** and ships no production code; the chosen direction feeds a downstream SOW that builds it for real.
 
