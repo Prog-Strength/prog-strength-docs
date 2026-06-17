@@ -25,6 +25,16 @@ repos:
 
 **Status**: Selected · **Last updated**: 2026-06-16
 
+> **Superseded by [`dx/calendar-view-refresh.md`](calendar-view-refresh.md).**
+> This exploration ran `greenfield`, **before** the app-wide design system
+> existed, and its selected `warm-organic-coaching` variant set the calendar's
+> amber/clay accent. The design system has since standardized on a violet accent
+> over a slate ramp ("the calendar's original clay accent yields to violet"), but
+> this surface was never fully re-toned. The refresh DX re-explores the calendar
+> `in-system` (violet/slate, conforming to the rest of the app) and additionally
+> fixes the month-bounded grid, the navigation, the day detail, and both modals.
+> This record stays as the provenance of the original direction.
+
 > **Selected: `warm-organic-coaching`.** Picked at the selection gate from
 > [prog-strength-web#56](https://github.com/Prog-Strength/prog-strength-web/pull/56)
 > (the `[DX — DO NOT MERGE]` draft PR). Implementation is carried by the
