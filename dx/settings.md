@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: settings
 idioms:
   - linear-minimal
@@ -23,7 +23,14 @@ repos:
 
 # DX: User Settings
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Awaiting selection · **Last updated**: 2026-06-17
+
+> **Exploration complete.** A draft `[DX — DO NOT MERGE]` PR is open against
+> `prog-strength-web` with all five variants on the comparison route
+> `/design-explore/settings` (flag-gated behind `NEXT_PUBLIC_DESIGN_EXPLORE`).
+> Compare them on the preview deploy, pick a direction, tick its box in the
+> PR body, set `status: selected` here (noting the winning idiom), and close
+> the PR — never merge it. Then open the implementation SOW.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a SOW it does not converge on one correct implementation — it produces N differentiated visual variants of a single frontend surface, side by side on one comparison route, awaiting a human pick. It **never merges** and ships no production code; the chosen direction feeds a downstream SOW that builds it for real.
 
