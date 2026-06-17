@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: timeline
 idioms:
   - strava-social-dashboard
@@ -22,7 +22,7 @@ repos:
 
 # DX: Timeline
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Selected (`strava-social-dashboard`) · **Last updated**: 2026-06-17
 
 ## Context
 

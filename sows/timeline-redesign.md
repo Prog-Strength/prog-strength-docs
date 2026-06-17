@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Timeline Redesign — Strava-Social-Dashboard
 
-**Status**: Ready for implementation (option 2 — route map deferred) · **Last updated**: 2026-06-16
+**Status**: Shipped · **Last updated**: 2026-06-17
 
 ## Scope decision (2026-06-16): option 2 — ship the dashboard, defer the route map
 
