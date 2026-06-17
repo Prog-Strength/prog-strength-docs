@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.1 · **Last updated**: 2026-06-16
+**Status**: v0.2 · **Last updated**: 2026-06-17
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -66,6 +66,36 @@ background.
 - **Nav**: rounded pills; active = accent-soft fill + accent-line border +
   accent-colored glyph.
 
+### Form controls
+
+The calendar plan edit form is the first real, interactive form-control set in
+the app; its treatment is the language every future form should adopt. Tokens
+first, descriptive (a reusable component primitive is a later DS work item — see
+Open). Provenance: [`sows/calendar-view-refresh.md`](sows/calendar-view-refresh.md).
+
+- **Field surface** — text/number inputs, textareas, and selects share one
+  rounded slate surface: `--surface-2` fill with a **hairline `--border`**
+  (a real border, not transparent), comfortable padding, `--foreground` text and
+  `--muted` placeholder. Radius `rounded-lg` for full-width fields, `rounded-md`
+  for dense grid cells.
+- **Focus** — an accent ring, never the browser default: `outline-none` +
+  border to `--accent` + a 1px `--accent-line` ring. Consistent across inputs,
+  selects, popover triggers, and the toggles.
+- **Labels** — quiet field labels above the control: uppercase, ~`text-[11px]`,
+  `font-semibold`, `tracking-wide`, in `--faint`. They read as metadata, not as
+  headings.
+- **Segmented toggle** — a binary/enum choice (e.g. Lift/Run, run type) is a
+  **full-pill segmented control**: a `--surface` track with a hairline border;
+  the active segment is an `--accent` fill with `--accent-fg` text; inactive
+  segments are `--muted`, brightening to `--foreground` on hover.
+- **Grouping / superset** — related rows bound into a group are marked with an
+  **`--accent-line` left-bar** (`border-l-2`) and a small uppercase `--accent`
+  group label ("Superset"). The same accent-line idiom marks any
+  "these belong together" grouping in a form.
+- **Primary vs secondary actions** — the form's primary action (Save / Plan /
+  Start) is a solid `--accent` pill with `--accent-fg`; secondary (Cancel /
+  Close) is a `--surface-2` pill with a hairline border. Disabled drops opacity.
+
 ### Component patterns (descriptive — grows as surfaces land)
 
 - **Cards / panels**: rounded, slate panel surface, hairline border.
@@ -90,8 +120,10 @@ their presentation is fine.
 State things honestly so a `greenfield` DX knows where it has room.
 
 - Whether the athletic condensed display generalizes beyond the timeline.
-- A formal spacing scale, elevation levels, and form-control (input/select/toggle)
-  specs — to be codified as more surfaces land.
+- A formal spacing scale and elevation levels — to be codified as more surfaces
+  land. (Form-control specs are now decided — see **Decided → Form controls**;
+  a reusable component primitive for them is still open, recommended once a
+  second form surface lands.)
 - Empty / loading / error patterns as reusable primitives.
 - Data-viz conventions (radar, route maps, sparklines) beyond their first use.
 - **Mobile** (`prog-strength-mobile`) — this doc is web-first today; mobile
@@ -109,9 +141,18 @@ State things honestly so a `greenfield` DX knows where it has room.
 - **Timeline** — athletic display character, conformed to these tokens:
   [`sows/timeline-redesign.md`](sows/timeline-redesign.md) ·
   [`dx/timeline.md`](dx/timeline.md).
+- **Form controls** — the input / select / segmented-toggle / superset-grouping
+  specs, established by the calendar plan edit form and codified here:
+  [`sows/calendar-view-refresh.md`](sows/calendar-view-refresh.md) ·
+  [`dx/calendar-view-refresh.md`](dx/calendar-view-refresh.md) (`true-month-grid`).
 
 ## Changelog
 
+- **v0.2** (2026-06-17) — added **Form controls** under Decided (rounded slate
+  field surface + hairline, uppercase faint labels, accent focus ring, the pill
+  segmented toggle, and the accent-line grouping/superset treatment), from the
+  calendar plan edit form ([`sows/calendar-view-refresh.md`](sows/calendar-view-refresh.md));
+  removed the corresponding "not yet decided" item.
 - **v0.1** (2026-06-16) — seeded from the first three explorations: dark theme,
   the slate ramp, the violet accent (replacing blue), Nunito + a scoped athletic
   display, rounded soft form, the macro tints and activity tonal hues, the
