@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: calendar-view-refresh
 idioms:
   - true-month-grid
@@ -22,7 +22,7 @@ repos:
 
 # DX: Calendar View (refresh)
 
-**Status**: Draft · **Last updated**: 2026-06-16
+**Status**: Selected — `true-month-grid` · **Last updated**: 2026-06-17
 
 > A second pass at the monthly calendar. The first exploration
 > ([`dx/calendar-view.md`](calendar-view.md)) was `greenfield` and picked

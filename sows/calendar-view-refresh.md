@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Calendar View Refresh — `true-month-grid`: a month-bounded slate/violet calendar
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-16
+**Status**: Shipped · **Last updated**: 2026-06-17
 
 ## Introduction
 
