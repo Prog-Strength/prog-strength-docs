@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Activities Page Redesign & System Re-tone — Oura-Calm-Minimal
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Shipped · **Last updated**: 2026-06-18
 
 > Frontend SOW. It implements a chosen DX variant and therefore inherits that DX's
 > `scope` — here **`greenfield`** — and, because the owner chose to **adopt the
