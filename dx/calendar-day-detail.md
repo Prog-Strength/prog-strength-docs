@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: calendar-day-detail
 idioms:
   - inbox-triage
@@ -23,7 +23,7 @@ repos:
 
 # DX: Calendar Day Detail (master–detail day view)
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Awaiting selection · **Last updated**: 2026-06-18
 
 ## Context
 
