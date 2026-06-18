@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Bodyweight Page Redesign — Trend-Band-Analyst
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Shipped · **Last updated**: 2026-06-18
 
 ## Introduction
 
