@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.3 · **Last updated**: 2026-06-18
+**Status**: v0.4 · **Last updated**: 2026-06-18
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -42,19 +42,36 @@ a light background.
   `#565a63`; hairline borders `rgba(255,255,255,0.06)`–`0.10`.
 - **Accent — desaturated periwinkle**: `#9aa6d6` (dark `#8490c4`, soft
   `rgba(154,166,214,0.14)`, line `rgba(154,166,214,0.30)`). **Replaces the
-  violet.** It is the primary action / active-state color (active/selected
-  states, the user's own emphasis, e.g. their chat bubbles) **and** the lifting
-  domain hue.
-- **Dual domain accents** — the canonical activity hues: **periwinkle `#9aa6d6`
-  = lift**, **sage `#7fae9e` = run** (sage soft `rgba(127,174,158,0.14)`, line
-  `rgba(127,174,158,0.30)`). These reconcile with the `--discipline-*` tokens:
-  lift → periwinkle, run → sage; **mobility/core stay reserved** for later. Never
-  saturated category-loud colors.
+  violet.** One accent only — the primary action / active-state color
+  (active/selected states, the user's own emphasis, e.g. their chat bubbles). It
+  is **app chrome, not an activity hue**; activity discipline colors stay distinct
+  (see Activity tonal hues below).
 - **Status — desaturated**: success `#86b39f`, danger `#c79292`, warning
   `#d6b87f` (amber re-toned to sit calmly on the new field).
 - **Macro tints**: protein `#34d399` (green), fat `#fbbf24` (amber), carb
   `#60a5fa` (blue), each on a ~13%-alpha background. For nutrition macro chips.
   **Unchanged** — they await nutrition's own migration SOW.
+- **Activity tonal hues**: per-discipline desaturated hues — **run** and **lift**
+  today, the system **extensible** to mobility/core later — toned to sit on the
+  dark near-black surface and **kept distinct from the periwinkle accent** (an
+  activity must never read as selection / "today"). Each discipline has a
+  three-token set — `bg` (tint fill), `fg` (text), `dot` (accent: left bar / pill
+  border / focus ring):
+
+  | Discipline | `--discipline-*-bg` | `--discipline-*-fg` | `--discipline-*-dot` |
+  | --- | --- | --- | --- |
+  | **run** (green-teal) | `#16302a` | `#82d3b8` | `#46b893` |
+  | **lift** (steel-blue) | `#1a2a3c` | `#8cbce8` | `#5598d8` |
+  | mobility *(reserved)* | `#1f3330` | `#8fd6c4` | `#4fbfa3` |
+  | core *(reserved)* | `#2c2440` | `#c2adf0` | `#9a7fe0` |
+
+  **Activity type owns activity color** — a session reads in its discipline hue
+  on every surface (month-grid pill, timeline rail), and lifecycle *status*
+  (planned / completed / skipped) is carried by **shape + badge**, never by the
+  color slot (no green-for-completed, no periwinkle-for-planned — the accent
+  stays app-chrome/selection only). The mapping lives behind a single resolver
+  (`lib/activity-colors.ts` → `activityColors(type)`) so a future
+  user-customizable palette is a one-place change.
 
 ### Typography
 
@@ -156,13 +173,23 @@ State things honestly so a `greenfield` DX knows where it has room.
   [`sows/calendar-view-refresh.md`](sows/calendar-view-refresh.md) ·
   [`dx/calendar-view-refresh.md`](dx/calendar-view-refresh.md) (`true-month-grid`).
 - **Activities** — the oura-calm-minimal re-tone (soft near-black ramp,
-  periwinkle + sage dual accents, Manrope, 14px hairline panels):
+  periwinkle accent, Manrope, 14px hairline panels):
   [`sows/activities-page-redesign.md`](sows/activities-page-redesign.md) ·
   [`dx/activities-page.md`](dx/activities-page.md) (`oura-calm-minimal`).
+- **Activity palette** — the enumerated `--discipline-*` token sets (run / lift
+  live, mobility / core reserved) and the "activity type owns the color, status
+  is shape + badge" rule, centralized behind `activityColors()`:
+  [`sows/calendar-event-detail-and-activity-colors.md`](sows/calendar-event-detail-and-activity-colors.md).
 
 ## Changelog
 
-- **v0.3** (2026-06-18) — re-toned to oura-calm-minimal (provenance: [`sows/activities-page-redesign.md`](sows/activities-page-redesign.md)): soft near-black neutral ramp replaces slate; desaturated periwinkle accent replaces violet; documented the dual domain accents (periwinkle = lift, sage = run); desaturated status colors; Manrope replaces Nunito as the primary family and the Oswald display accent is dropped; 14px hairline panels as the default form. Fixed Points (the "P" mark, the dark theme) hold; macro tints unchanged pending nutrition's migration.
+- **v0.4** (2026-06-18) — re-toned to oura-calm-minimal (provenance: [`sows/activities-page-redesign.md`](sows/activities-page-redesign.md)): soft near-black neutral ramp replaces slate; desaturated periwinkle accent replaces violet; desaturated status colors; Manrope replaces Nunito as the primary family and the Oswald display accent is dropped; 14px hairline panels as the default form. The `--discipline-*` activity hues (run green-teal / lift steel-blue) are **kept distinct from the accent** per v0.3's "activity ≠ selection" rule — they are *not* re-toned to the accent hue. Fixed Points (the "P" mark, the dark theme) hold; macro tints unchanged pending nutrition's migration.
+- **v0.3** (2026-06-18) — enumerated the `--discipline-*` activity palette
+  (run / lift token sets with values; mobility / core reserved) and recorded the
+  rule that **activity type owns the activity color** on every surface while
+  lifecycle status is conveyed by shape + badge (retiring green-for-completed
+  and violet-for-planned), centralized behind `activityColors()`
+  ([`sows/calendar-event-detail-and-activity-colors.md`](sows/calendar-event-detail-and-activity-colors.md)).
 - **v0.2** (2026-06-17) — added **Form controls** under Decided (rounded slate
   field surface + hairline, uppercase faint labels, accent focus ring, the pill
   segmented toggle, and the accent-line grouping/superset treatment), from the
