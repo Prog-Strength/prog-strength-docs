@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.2 · **Last updated**: 2026-06-17
+**Status**: v0.3 · **Last updated**: 2026-06-18
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -48,7 +48,24 @@ background.
   `#60a5fa` (blue), each on a ~13%-alpha background. For nutrition macro chips.
 - **Activity tonal hues**: per-discipline desaturated hues — **run** and **lift**
   today, the system **extensible** to mobility/core later — re-toned to sit on
-  the dark slate surface. Never saturated category-loud colors.
+  the dark slate surface. Never saturated category-loud colors. Each discipline
+  has a three-token set — `bg` (tint fill), `fg` (text), `dot` (accent: left
+  bar / pill border / focus ring):
+
+  | Discipline | `--discipline-*-bg` | `--discipline-*-fg` | `--discipline-*-dot` |
+  | --- | --- | --- | --- |
+  | **run** (green-teal) | `#16302a` | `#82d3b8` | `#46b893` |
+  | **lift** (steel-blue) | `#1a2a3c` | `#8cbce8` | `#5598d8` |
+  | mobility *(reserved)* | `#1f3330` | `#8fd6c4` | `#4fbfa3` |
+  | core *(reserved)* | `#2c2440` | `#c2adf0` | `#9a7fe0` |
+
+  **Activity type owns activity color** — a session reads in its discipline hue
+  on every surface (month-grid pill, timeline rail), and lifecycle *status*
+  (planned / completed / skipped) is carried by **shape + badge**, never by the
+  color slot (no green-for-completed, no violet-for-planned — violet stays
+  app-chrome/selection only). The mapping lives behind a single resolver
+  (`lib/activity-colors.ts` → `activityColors(type)`) so a future
+  user-customizable palette is a one-place change.
 
 ### Typography
 
@@ -145,9 +162,19 @@ State things honestly so a `greenfield` DX knows where it has room.
   specs, established by the calendar plan edit form and codified here:
   [`sows/calendar-view-refresh.md`](sows/calendar-view-refresh.md) ·
   [`dx/calendar-view-refresh.md`](dx/calendar-view-refresh.md) (`true-month-grid`).
+- **Activity palette** — the enumerated `--discipline-*` token sets (run / lift
+  live, mobility / core reserved) and the "activity type owns the color, status
+  is shape + badge" rule, centralized behind `activityColors()`:
+  [`sows/calendar-event-detail-and-activity-colors.md`](sows/calendar-event-detail-and-activity-colors.md).
 
 ## Changelog
 
+- **v0.3** (2026-06-18) — enumerated the `--discipline-*` activity palette
+  (run / lift token sets with values; mobility / core reserved) and recorded the
+  rule that **activity type owns the activity color** on every surface while
+  lifecycle status is conveyed by shape + badge (retiring green-for-completed
+  and violet-for-planned), centralized behind `activityColors()`
+  ([`sows/calendar-event-detail-and-activity-colors.md`](sows/calendar-event-detail-and-activity-colors.md)).
 - **v0.2** (2026-06-17) — added **Form controls** under Decided (rounded slate
   field surface + hairline, uppercase faint labels, accent focus ring, the pill
   segmented toggle, and the accent-line grouping/superset treatment), from the
