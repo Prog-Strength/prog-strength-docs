@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Deprecate the In-Memory Repository Layer (SQLite-Only)
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Shipped · **Last updated**: 2026-06-18
 
 ## Introduction
 
