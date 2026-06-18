@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-mcp
@@ -9,7 +9,7 @@ repos:
 
 # Batch Food Logging: One Agent Tool Call Per Meal
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Shipped · **Last updated**: 2026-06-18
 
 ## Introduction
 
