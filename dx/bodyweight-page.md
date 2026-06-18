@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: bodyweight-page
 idioms:
   - trend-band-analyst
@@ -24,7 +24,11 @@ repos:
 
 # DX: Bodyweight Page
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Selected (`trend-band-analyst`) · **Last updated**: 2026-06-17
+
+> **Selected:** `trend-band-analyst` (DX comparison PR
+> Prog-Strength/prog-strength-web#72, closed un-merged). Built for real by
+> [`sows/bodyweight-page-redesign.md`](../sows/bodyweight-page-redesign.md).
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
