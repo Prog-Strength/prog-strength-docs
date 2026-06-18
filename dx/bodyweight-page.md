@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: bodyweight-page
 idioms:
   - trend-band-analyst
@@ -24,7 +24,7 @@ repos:
 
 # DX: Bodyweight Page
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Awaiting selection · **Last updated**: 2026-06-18
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
