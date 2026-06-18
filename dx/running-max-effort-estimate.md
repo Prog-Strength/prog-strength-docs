@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: running-max-effort-estimate
 idioms:
   - single-number-hero
@@ -23,7 +23,7 @@ repos:
 
 # DX: Running Max-Effort Estimate
 
-**Status**: Draft · **Last updated**: 2026-06-17
+**Status**: Awaiting selection · **Last updated**: 2026-06-18
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
