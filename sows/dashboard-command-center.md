@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Dashboard — Command-Center
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-19
+**Status**: Shipped · **Last updated**: 2026-06-19
 
 > Frontend-led SOW with a supporting API change. It implements a chosen DX variant
 > and therefore inherits that DX's `scope` — here **`in-system`**. The visual
