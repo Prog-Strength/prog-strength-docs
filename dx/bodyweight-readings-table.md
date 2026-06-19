@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: bodyweight-readings-table
 idioms:
   - ledger-dense
@@ -24,7 +24,7 @@ repos:
 
 # DX: Bodyweight Readings Table
 
-**Status**: Draft · **Last updated**: 2026-06-18
+**Status**: Awaiting selection · **Last updated**: 2026-06-19
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
