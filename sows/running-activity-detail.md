@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Running Activity Detail — Splits-Ledger-Spine
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-18
+**Status**: Shipped · **Last updated**: 2026-06-19
 
 > Frontend SOW. It implements a chosen DX variant and therefore inherits that DX's
 > `scope` — here **`in-system`**. The visual foundation (design-system **v0.4**,
