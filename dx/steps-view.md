@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: steps-view
 idioms:
   - editorial-average
@@ -24,7 +24,11 @@ repos:
 
 # DX: Steps View
 
-**Status**: Draft · **Last updated**: 2026-06-18
+**Status**: Selected (`goal-ring-hero`) · **Last updated**: 2026-06-19
+
+> **Selected:** `goal-ring-hero` (DX comparison PR
+> Prog-Strength/prog-strength-web#87, closed un-merged). Built for real by
+> [`sows/steps-view-goal-ring.md`](../sows/steps-view-goal-ring.md).
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
