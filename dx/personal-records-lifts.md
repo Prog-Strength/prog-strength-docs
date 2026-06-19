@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: personal-records-lifts
 idioms:
   - readiness-gauge
@@ -24,7 +24,14 @@ repos:
 
 # DX: Personal Records — Lifts
 
-**Status**: Draft · **Last updated**: 2026-06-18
+**Status**: Awaiting selection · **Last updated**: 2026-06-19
+
+> **Worker note (2026-06-19)**: The five variants are built on branch
+> `dx/personal-records-lifts` in `prog-strength-web` and the draft
+> `[DX — DO NOT MERGE]` PR is open for the selection gate. `status:` advanced
+> to `awaiting_selection`. Owner: compare on the preview, tick the winning
+> idiom, set the terminal `selected`/`abandoned`, and **close the PR — never
+> merge it.**
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
