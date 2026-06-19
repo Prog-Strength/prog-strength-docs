@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Bodyweight Readings Table — Timeline-Rail
 
-**Status**: Draft · **Last updated**: 2026-06-18
+**Status**: Shipped · **Last updated**: 2026-06-19
 
 ## Introduction
 
