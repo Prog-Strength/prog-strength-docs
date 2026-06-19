@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: workout-detail-refinements
 idioms:
   - muscle-body-map
@@ -23,7 +23,7 @@ repos:
 
 # DX: Workout Detail — Refinements (a Graphic for the Session + Expandable Sets)
 
-**Status**: Draft · **Last updated**: 2026-06-19
+**Status**: Awaiting selection · **Last updated**: 2026-06-19
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
