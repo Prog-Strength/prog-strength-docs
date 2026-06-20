@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-infra
@@ -8,7 +8,7 @@ repos:
 
 # Centralized API Configuration
 
-**Status**: Draft · **Last updated**: 2026-06-20
+**Status**: Shipped · **Last updated**: 2026-06-20
 
 ## Introduction
 
