@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.4 · **Last updated**: 2026-06-18
+**Status**: v0.4.1 · **Last updated**: 2026-06-19
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -72,6 +72,27 @@ a light background.
   stays app-chrome/selection only). The mapping lives behind a single resolver
   (`lib/activity-colors.ts` → `activityColors(type)`) so a future
   user-customizable palette is a one-place change.
+
+- **Lift intensity ramp**: a four-stop ramp of the **lift** steel-blue hue —
+  the **canonical encoding of graded intensity**, for any graphic that shades a
+  region by how hard it was worked. It interpolates from dim (a tier just above
+  the unworked near-black silhouette) to bright, where the top tier **is**
+  `--discipline-lift-fg`, so "harder-worked = more saturated steel-blue":
+
+  | Token | Value | Tier |
+  | --- | --- | --- |
+  | `--discipline-lift-1` | `#39405a` | 1 — lightly worked |
+  | `--discipline-lift-2` | `#5a6493` | 2 |
+  | `--discipline-lift-3` | `#7d88c2` | 3 |
+  | `--discipline-lift-4` | `#aab4dd` | 4 — hardest worked (= `--discipline-lift-fg`) |
+
+  First use: the **workout detail muscle body-map** (front/back silhouette,
+  worked regions shaded by set volume) — provenance
+  [`sows/workout-detail-refinements.md`](sows/workout-detail-refinements.md).
+  Reusable by any future per-intensity graphic (a heatmap, a load-distribution
+  bar). The ramp is **additive to the existing `--discipline-lift-*` triplet**
+  (`bg` / `fg` / `dot`), not a replacement; it lives alongside it in
+  `app/globals.css` (with `--color-discipline-lift-1..4` Tailwind aliases).
 
 ### Typography
 
@@ -183,6 +204,12 @@ State things honestly so a `greenfield` DX knows where it has room.
 
 ## Changelog
 
+- **v0.4.1** (2026-06-19) — added the four-stop **lift intensity ramp**
+  (`--discipline-lift-1..4`, dim → bright steel-blue, tier 4 = `--discipline-lift-fg`)
+  as the canonical encoding of graded intensity, additive to the existing
+  `--discipline-lift-*` triplet. First use: the workout-detail muscle body-map
+  ([`sows/workout-detail-refinements.md`](sows/workout-detail-refinements.md)).
+  No re-tone of the v0.4 foundation.
 - **v0.4** (2026-06-18) — re-toned to oura-calm-minimal (provenance: [`sows/activities-page-redesign.md`](sows/activities-page-redesign.md)): soft near-black neutral ramp replaces slate; desaturated periwinkle accent replaces violet; desaturated status colors; Manrope replaces Nunito as the primary family and the Oswald display accent is dropped; 14px hairline panels as the default form. The `--discipline-*` activity hues (run green-teal / lift steel-blue) are **kept distinct from the accent** per v0.3's "activity ≠ selection" rule — they are *not* re-toned to the accent hue. Fixed Points (the "P" mark, the dark theme) hold; macro tints unchanged pending nutrition's migration.
 - **v0.3** (2026-06-18) — enumerated the `--discipline-*` activity palette
   (run / lift token sets with values; mobility / core reserved) and recorded the
