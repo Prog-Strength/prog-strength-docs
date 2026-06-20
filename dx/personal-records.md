@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: personal-records
 idioms:
   - compact-dashboard-rail
@@ -25,7 +25,12 @@ repos:
 
 # DX: Personal Records
 
-**Status**: Draft · **Last updated**: 2026-06-19
+**Status**: Awaiting selection · **Last updated**: 2026-06-20
+
+> Five variants are built and rendered side by side on the flag-gated
+> comparison route `/design-explore/personal-records` in `prog-strength-web`
+> (draft PR, branch `dx/personal-records`). The owner picks a direction at the
+> selection gate, then sets the terminal `selected` / `abandoned` status.
 
 ## Context
 
