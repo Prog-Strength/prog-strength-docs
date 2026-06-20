@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Personal Records — Split Master-Detail Redesign
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-20
+**Status**: Shipped · **Last updated**: 2026-06-20
 
 ## Introduction
 
