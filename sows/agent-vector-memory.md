@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 depends_on:
   - sows/centralized-api-config.md
 repos:
@@ -10,7 +10,7 @@ repos:
 
 # Agent Vector Memory
 
-**Status**: Draft · **Last updated**: 2026-06-20
+**Status**: Shipped · **Last updated**: 2026-06-20
 
 ## Introduction
 
