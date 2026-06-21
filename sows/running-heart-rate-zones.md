@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Running Heart Rate Zones
 
-**Status**: Ready for implementation · **Last updated**: 2026-06-21
+**Status**: Shipped · **Last updated**: 2026-06-21
 
 ## Introduction
 
