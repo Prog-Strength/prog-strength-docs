@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: activities-overview
 idioms:
   - headline-digest
@@ -23,7 +23,7 @@ repos:
 
 # DX: Activities Overview
 
-**Status**: Draft · **Last updated**: 2026-06-21
+**Status**: Selected (`instrument-panel`) · **Last updated**: 2026-06-22
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
