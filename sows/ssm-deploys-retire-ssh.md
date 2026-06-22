@@ -42,28 +42,41 @@ Two properties make the SSH key the least comfortable credential left in the org
    surface independent of the key itself.
 
 The end state: deploys run through **AWS Systems Manager (SSM) Run Command**, authenticated by the
-existing OIDC role; app secrets live in **SSM Parameter Store** and are fetched on the host via its
-instance role; **port 22 is closed**; and `EC2_SSH_KEY` / `EC2_HOST` are deleted. Operationally:
-*"nothing with a shell credential or an open SSH port touches the prod host; CI talks to it only
-through SSM, scoped by IAM and logged in CloudTrail."*
+existing OIDC role; app secrets live in **AWS Secrets Manager** (infra-owned, seeded from the
+existing GitHub secrets) and are fetched on the host via its instance role; **port 22 is closed**;
+and `EC2_SSH_KEY` / `EC2_HOST` are deleted. Operationally: *"nothing with a shell credential or an
+open SSH port touches the prod host; CI talks to it only through SSM, scoped by IAM and logged in
+CloudTrail; secrets never ride a deploy."*
 
 ## Why this is a clean fit (not a rewrite)
 
-Much of the groundwork already exists, which is why this is hardening rather than re-architecture:
+The groundwork already exists in this account, which is why this is hardening rather than
+re-architecture:
 
-- **The OIDC role already has the SSM permissions.** Per `github-actions-oidc-role.md`, the shared
-  `prog-strength-github-actions` role's policy already grants `ssm:SendCommand`,
-  `ssm:ListCommandInvocations`, and parameter reads. The GitHub side needs no new IAM.
+- **The SSM deploy transport is already proven here.** The OIDC role's policy
+  (`modules/github_oidc/main.tf`, `SSMSendCommand` statement) grants `ssm:SendCommand`,
+  `ssm:ListCommandInvocations`, and `ssm:GetCommandInvocation` on the account's instances — and
+  `prog-strength-developer`'s `deploy-manager.yml` **already uses SSM RunCommand to push compose
+  updates to its manager instance and poll the invocation**. We are applying a working pattern to the
+  backend host, not inventing one. (The role's `ssm:GetParameter*` grant is AMI-lookup only —
+  `parameter/aws/service/*` — and is irrelevant here, since the *instance* role reads secrets, not
+  the OIDC role.)
+- **Secrets Manager is the established runtime-secret pattern.** `prog-strength-developer` already
+  stores `prog-strength-developer/claude-credentials` and `prog-strength-developer/github-app` in
+  Secrets Manager (`terraform/secrets.tf`), read at runtime by an instance role via
+  `secretsmanager:GetSecretValue`. That is exactly the pattern the backend `.env` fetch needs — one
+  secrets story for the whole account, not two.
 - **The host already authenticates to AWS by instance role, not static keys.** Inside today's SSH
-  session, ECR login already uses the instance metadata service (`aws ecr get-login-password` with no
-  static creds). Fetching secrets from Parameter Store the same way is the identical pattern.
+  session, ECR login already uses the instance metadata service (`aws ecr get-login-password`, no
+  static creds). Fetching secrets via the instance role is the identical pattern.
 - **Infra already owns all on-host orchestration.** The host clones only `prog-strength-infra` on
   first boot (`bootstrap.infra_repo_url`); compose files, the Caddyfile, monitoring, and litestream
   config all live there. The deploy *scripts* belong there too — moving the inline workflow bash into
-  versioned scripts in infra is a natural consolidation, not a new concept.
+  versioned scripts in infra is a natural consolidation. Keeping the secret definitions there too
+  means **every backend resource is managed by `prog-strength-infra`**.
 - **The instance role is designed for additive attachments.** `modules/compute/iam.tf` owns the role
   and exposes `instance_role_name`; domain modules hang policies off it (ECR pull, Litestream S3).
-  Adding SSM is one more attachment in the same shape — see `modules/ecr/main.tf`'s
+  Adding Secrets Manager read is one more attachment in the same shape — see `modules/ecr/main.tf`'s
   `instance_ecr_pull`.
 
 ## Proposed Solution
@@ -74,48 +87,63 @@ Each workflow's deploy step becomes: assume the OIDC role (already wired via
 `aws-actions/configure-aws-credentials@v4`), then `aws ssm send-command` targeting the instance and
 invoking a **versioned deploy script that already lives on the host** (under the
 `prog-strength-infra` checkout). The runner passes only **non-secret** parameters — chiefly the
-released version tag. The command is run synchronously (poll `ListCommandInvocations` /
-`get-command-invocation` until terminal) so the workflow reflects the real deploy exit status, the
-same guarantee `set -e` gives today.
+released version tag. The command is run synchronously (poll `get-command-invocation` until terminal)
+so the workflow reflects the real deploy exit status, the same guarantee `set -e` gives today.
 
 The SSM agent dials *out* to AWS over 443, so SSM needs **no inbound port** — this is what lets us
 close 22 entirely at the end.
 
-### Secrets: Parameter Store, fetched on the host
+### Secrets: Secrets Manager, infra-owned, seeded from GitHub
 
 This is the substantive piece. Today ~16 app secrets (in api's `release.yml` alone:
 `JWT_SIGNING_KEY`, `GOOGLE_CLIENT_*`, `CALENDAR_TOKEN_ENC_KEY`, the bucket identities, `ADMIN_EMAILS`,
 Grafana creds, nutrition + vector-memory provider keys, …) are forwarded over the SSH channel and
-written to `.env` on the host.
+written to `.env` on the host on **every deploy**.
 
-They **cannot** simply move to SSM command parameters: Run Command records its parameters in command
-history and CloudTrail, so passing secrets that way would *leak* them. Instead:
+They cannot move to SSM command parameters (Run Command records its parameters in command history and
+CloudTrail — passing secrets that way leaks them). Instead, all backend secrets live in Secrets
+Manager, with a deliberate split of ownership that keeps plaintext out of Terraform state:
 
-- Each secret becomes an SSM Parameter Store **SecureString** under a `/prog-strength/prod/` prefix.
-- The on-host deploy script reads them via the instance role (`aws ssm get-parameters-by-path
-  --with-decryption`) and writes `.env` locally — exactly where today's script writes it.
-- The runner never sees the secret values at all.
+- **Terraform (infra) owns the secret *containers*.** One JSON secret per service —
+  `prog-strength-api/app-config`, `prog-strength-mcp/app-config`, `prog-strength-agent/app-config` —
+  created via `aws_secretsmanager_secret`, mirroring the `prog-strength-developer/*` naming. Infra
+  owns the resource, its IAM, and (future) rotation policy: every backend resource stays in one repo.
+- **Terraform does *not* own the secret *values*.** No `aws_secretsmanager_secret_version` carrying
+  real content; values never enter TF state. This honors the rule `prog-strength-developer/
+  terraform/secrets.tf` already states explicitly ("committing them to state would be a leak risk").
+- **A `seed-secrets.yml` workflow in infra seeds the values from GitHub secrets.** A
+  `workflow_dispatch` job assumes the OIDC role, reads the app secrets from GitHub org/repo secrets,
+  and `aws secretsmanager put-secret-value`s each service's JSON blob. Run it once at setup and again
+  whenever a secret rotates. **This is the only place a secret transits a runner — and only on an
+  explicit seed, never on a deploy.**
+- **The host reads secrets via its instance role at deploy time.** The on-host script runs
+  `aws secretsmanager get-secret-value`, parses the JSON with `jq`, and renders `.env` into the same
+  target dir as today. Optional provider keys (FatSecret, USDA, OpenAI/Anthropic) absent from the
+  blob default to empty, preserving today's degrade-to-503 behavior. The runner never sees a value.
 
-This is **strictly better than today**, where every secret transits the GitHub runner on every
-deploy. It also deletes the long `env:`/`envs:` block from each release workflow.
+This deletes the long `env:`/`envs:` block from every release workflow and removes secrets from the
+deploy path entirely.
 
-Provider keys that are genuinely optional today (FatSecret, USDA, OpenAI/Anthropic — they deploy as
-empty strings when unset) stay optional: a missing parameter resolves to empty, preserving the
-current degrade-to-503 behavior.
+**Source-of-truth note (accepted):** GitHub org secrets remain the source of truth for app config
+(as today), now *synced* into Secrets Manager rather than streamed over SSH on every deploy. This
+differs from the developer repo's owner-private root credentials (the Claude OAuth token, the GitHub
+App private key), which are hand-seeded once and never live in GitHub. App config secrets already
+live in GitHub; keeping them there as the seed source keeps the process automated and the account
+reproducible from `infra + GitHub secrets`, at the cost of GitHub still holding them. Accepted
+deliberately; a future move to Secrets-Manager-as-source-of-truth (hand-seeded, GitHub-free) is an
+additive change to the seed step, not a redesign.
 
-### Instance role additions (infra)
+### IAM changes
 
-A new SSM concern (either a small `modules/ssm` or an attachment block mirroring
-`modules/ecr/main.tf`) hangs two things off `instance_role_name`:
-
-1. **`AmazonSSMManagedInstanceCore`** (AWS-managed) so the agent registers the instance as a managed
-   node and can receive commands.
-2. **A scoped inline policy**: `ssm:GetParameter*` on `arn:…:parameter/prog-strength/prod/*`, plus
-   `kms:Decrypt` on the key backing the SecureStrings (the AWS-managed `alias/aws/ssm` key needs no
-   explicit grant for same-account use; a customer-managed key would).
-
-Scope to the `/prog-strength/prod/*` path rather than account-wide, consistent with the prefix-fence
-posture from the OIDC SOW.
+- **Instance role** (infra, mirroring `modules/ecr`'s attachment): add
+  `AmazonSSMManagedInstanceCore` (AWS-managed) so the agent registers the node, plus an inline
+  `secretsmanager:GetSecretValue` scoped to the `prog-strength-*/*` secret ARNs. The default
+  `aws/secretsmanager` KMS key needs no explicit `kms:Decrypt` grant for same-account use.
+- **OIDC role** (infra, `modules/github_oidc`): the SSM transport actions already exist. Add
+  `secretsmanager:CreateSecret` / `TagResource` (the apply pipeline creates the containers) and
+  `secretsmanager:PutSecretValue` / `DescribeSecret` (the seed workflow writes values), scoped to
+  `prog-strength-*`. The existing `SecretsManagerDescribe` statement (developer/* only) is widened or
+  joined by a backend statement.
 
 ### Closing the door (infra + GitHub)
 
@@ -132,94 +160,99 @@ Once all seven workflows deploy via SSM and Session Manager break-glass is verif
 
 - All seven deploy workflows authenticate via the existing OIDC role and deploy via `aws ssm
   send-command`; none use `appleboy/ssh-action` or the SSH secrets.
-- App secrets live in SSM Parameter Store SecureStrings under `/prog-strength/prod/` and are fetched
-  on the host by its instance role; no secret transits the GitHub runner.
-- The EC2 instance role carries `AmazonSSMManagedInstanceCore` + a parameter-read policy scoped to
-  `/prog-strength/prod/*`; the instance shows as a managed node in SSM.
+- All backend app secrets live in infra-owned Secrets Manager secrets (`prog-strength-<service>/
+  app-config`), seeded from GitHub secrets by an infra `seed-secrets.yml` workflow, with no secret
+  value ever written to Terraform state and no secret transiting a runner on a deploy.
+- The instance role can read those secrets (`GetSecretValue`) and is registered as an SSM managed
+  node; the OIDC role can create/seed them and send commands.
 - Inbound port 22 is closed in `prod.tfvars`; AWS Session Manager is the verified break-glass shell.
 - `EC2_SSH_KEY` and `EC2_HOST` org secrets are deleted and removed from all deploy docs.
-- The migration is reversible at every checkpoint until the final cutover (old SSH path stays valid
+- The migration is reversible at every checkpoint until the final cutover (the SSH path stays valid
   until SSM is proven).
 
 ### Non-Goals
 
-- **No new GitHub-side IAM.** The OIDC role already grants the needed SSM actions; if a gap surfaces
-  it is a one-line policy expansion in infra, not a redesign.
-- **Not changing what a deploy *does*** — same `docker compose pull/down/up`, same compose files,
-  same image-from-ECR flow. Only the transport and the secret source change.
+- **No new deploy *behavior*** — same `docker compose pull/down/up`, same compose files, same
+  image-from-ECR flow. Only the transport and the secret source change.
 - **Not migrating non-secret config.** `config.toml` (`centralized-api-config.md`) is unaffected.
-- **Not touching `prog-strength-developer`'s deploys** — it does not use the SSH deploy secrets.
+- **Not changing the source of truth for app secrets** — they remain in GitHub, now synced to Secrets
+  Manager. (Secrets-Manager-as-source-of-truth is a deferred, additive change.)
+- **Not touching `prog-strength-developer`'s deploys or its existing secrets** — it already runs on
+  SSM + Secrets Manager and does not use the SSH deploy secrets.
 - **Not removing the EC2 key pair resource** in this SOW (optional later cleanup; out of scope to
   avoid an instance replacement).
 
 ## Implementation Details
 
+### Secret containers + seeding (prog-strength-infra)
+
+- A `modules/secrets` (or inline in the compute/backend composition) declaring
+  `aws_secretsmanager_secret` for each of `prog-strength-api/app-config`,
+  `prog-strength-mcp/app-config`, `prog-strength-agent/app-config`. No `_version` resource with real
+  values; if a placeholder version is needed to satisfy consumers, guard it with
+  `lifecycle { ignore_changes = [secret_string] }` so the seed workflow's values are never reverted
+  by a later apply.
+- `seed-secrets.yml` (`workflow_dispatch`): assume OIDC role → for each service, assemble the JSON
+  blob from `${{ secrets.* }}` and `aws secretsmanager put-secret-value --secret-id
+  prog-strength-<svc>/app-config --secret-string …`. The forwarded-secret list is essentially the
+  `envs:` list being removed from the deploy workflows — it moves here, run on demand instead of per
+  deploy.
+
 ### On-host deploy scripts (prog-strength-infra)
 
-Move the inline bash from each workflow into versioned scripts in infra, e.g.
-`deploy/api.sh`, `deploy/mcp.sh`, `deploy/agent.sh`, `deploy/caddy-reload.sh`. Each script:
+Move the inline bash from each workflow into versioned scripts, e.g. `deploy/api.sh`, `deploy/mcp.sh`,
+`deploy/agent.sh`, `deploy/caddy-reload.sh`. Each service script:
 
 1. `cd /home/ubuntu/prog-strength-infra && git fetch --prune && git checkout main && git pull --ff-only`
-   (unchanged from today).
+   (unchanged).
 2. ECR login via instance role (unchanged).
-3. **New:** fetch secrets with `aws ssm get-parameters-by-path --path /prog-strength/prod/
-   --with-decryption --recursive` and render `.env` (`umask 077`, same target dir as today).
+3. **New:** `aws secretsmanager get-secret-value --secret-id prog-strength-<svc>/app-config
+   --query SecretString --output text | jq -r 'to_entries[] | "\(.key)=\(.value)"' > .env`
+   (`umask 077`, same target dir as today; absent optional keys simply don't appear → empty).
 4. `docker compose pull/down/up` with the same `-f` merge of the monitoring compose file; echo +
-   `ps` + `logs --tail` as now. Keep `set -euo pipefail`.
-
-The version tag arrives as an environment variable/parameter from the SSM invocation (non-secret).
+   `ps` + `logs --tail` as now. Keep `set -euo pipefail`. Version tag arrives as a non-secret
+   parameter from the SSM invocation.
 
 ### SSM invocation (each release/deploy workflow)
 
 Replace the `appleboy/ssh-action` step with:
 
 - `aws-actions/configure-aws-credentials@v4` with `role-to-assume: ${{ secrets.AWS_GHA_ROLE_ARN }}`
-  and `id-token: write` (the `build_and_push` job already does exactly this — copy the pattern).
-- `aws ssm send-command --document-name AWS-RunShellScript --instance-ids <id>` (resolve the instance
-  by tag filter rather than hardcoding, so `EC2_HOST` is fully retired) with parameters running the
-  on-host script and passing the version tag. Poll to completion and fail on non-`Success` status.
-
-`deploy-caddy.yml` follows the same shape, invoking `deploy/caddy-reload.sh`.
-
-### Parameter Store seeding
-
-Seeding the SecureStrings is a one-time operation from the current secret values. Options, decide at
-implementation: (a) `terraform`-managed `aws_ssm_parameter` resources with values injected at apply
-(keeps them in state — acceptable for SecureString in this single-account setup, matches how secrets
-already flow through Terraform-owned identities), or (b) a one-shot CLI seed documented in the infra
-README, keeping values out of state. Lean (b) for the true secrets to avoid plaintext-in-state, (a)
-for non-sensitive identities already in tfvars. Resolve in Open Questions.
+  and `id-token: write` (the `build_and_push` job already does this — copy the pattern).
+- `aws ssm send-command --document-name AWS-RunShellScript --targets <tag filter>` invoking the
+  on-host script and passing the version tag, then poll `get-command-invocation` to completion and
+  fail on non-`Success`. `deploy-caddy.yml` invokes `deploy/caddy-reload.sh`. Pattern reference:
+  `prog-strength-developer/.github/workflows/deploy-manager.yml`.
 
 ### SSM agent presence
 
 Recent Ubuntu EC2 AMIs ship the SSM agent preinstalled via snap. Confirm it is running on the live
-host (`snap services amazon-ssm-agent` / managed-node status in the SSM console) and, if `bootstrap.sh`
-provisions the host from a base image, ensure the agent is enabled there so a future
-`replace-instance` run comes up SSM-ready.
+host (managed-node status in the SSM console) and, if `bootstrap.sh` provisions the host from a base
+image, ensure the agent is enabled so a future `replace-instance` run comes up SSM-ready.
 
 ## Rollout Sequence
 
 Three checkpoints, each independently verifiable and reversible. The SSH path stays fully functional
 until Checkpoint 3.
 
-### Checkpoint 1 — Parameter Store + instance role (no behavior change yet)
+### Checkpoint 1 — Secrets Manager + instance role (no deploy change yet)
 
-1. Infra PR: SSM attachment on the instance role (`AmazonSSMManagedInstanceCore` + scoped parameter
-   read) and confirm/enable the SSM agent. Verify the instance appears as a managed node.
-2. Seed `/prog-strength/prod/*` SecureStrings from current secret values.
-3. **Verify:** from the host, `aws ssm get-parameters-by-path --with-decryption` returns the expected
-   keys. Deploys still run over SSH — nothing user-visible changed. Fully revertible (drop the
-   attachment, delete the parameters).
+1. Infra PR: secret containers + instance-role attachments (`AmazonSSMManagedInstanceCore` +
+   `GetSecretValue`) + the OIDC-role create/put expansion + confirm/enable the SSM agent. Verify the
+   instance appears as a managed node.
+2. Run `seed-secrets.yml` to populate the JSON blobs from the current GitHub secrets.
+3. **Verify:** from the host, `aws secretsmanager get-secret-value` returns the expected keys and the
+   `jq` render produces a `.env` byte-equivalent to today's. Deploys still run over SSH — nothing
+   user-visible changed. Fully revertible (drop the attachments, delete the secrets).
 
 ### Checkpoint 2 — SSM deploy path, alongside SSH
 
-1. Infra PR: add the `deploy/*.sh` scripts (secret fetch from Parameter Store + existing compose
-   logic).
+1. Infra PR: add the `deploy/*.sh` scripts (Secrets Manager fetch + existing compose logic).
 2. Convert **one** workflow first (suggest `agent/manual-deploy.yml` — lowest blast radius,
    dispatchable on demand) to the SSM transport. Trigger it; confirm a green deploy with the service
-   healthy and `.env` correctly rendered from Parameter Store.
-3. **Verify before proceeding:** the SSM-deployed service is byte-for-byte equivalent in behavior to
-   an SSH deploy. If anything is off, revert the single workflow — SSH is untouched everywhere else.
+   healthy and `.env` correctly rendered from Secrets Manager.
+3. **Verify before proceeding:** the SSM-deployed service is behavior-equivalent to an SSH deploy. If
+   anything is off, revert the single workflow — SSH is untouched everywhere else.
 
 ### Checkpoint 3 — Cut over, verify break-glass, close the door
 
@@ -233,30 +266,33 @@ until Checkpoint 3.
 4. After all seven workflows have a green SSM run **and** 22 is confirmed closed without breakage:
    delete `EC2_SSH_KEY` and `EC2_HOST` org secrets and scrub them from
    `prog-strength-api/DEPLOYMENT.md`, `prog-strength-mcp/README.md`, `prog-strength-infra/README.md`,
-   and the agent docs.
+   and the agent docs. (The app-config GitHub secrets stay — they seed Secrets Manager.)
 
 ## Failure / Rollback
 
 - Through Checkpoints 1–2, SSH remains the live deploy path; any SSM problem is rolled back by
   reverting the single converted workflow.
 - In Checkpoint 3, until 22 is closed, reverting a workflow file restores SSH for that repo. The
-  point of no easy return is closing the port + deleting the secrets — gated behind a verified
+  point of no easy return is closing the port + deleting the SSH secrets — gated behind a verified
   Session Manager session and green SSM runs across all seven workflows. If SSM deploys regress after
   the port is closed, reopen 22 via a one-line `prod.tfvars` revert and re-add the secrets to recover
   the SSH path.
 
 ## Open Questions
 
-1. **Parameter Store seeding: Terraform-managed vs one-shot CLI?** Lean: CLI seed for true secrets
-   (keeps plaintext out of TF state), Terraform `aws_ssm_parameter` for the non-sensitive identities
-   already in tfvars. Confirm at implementation.
-2. **Instance targeting in `send-command`: tag filter vs instance-id?** A tag filter (e.g.
+1. **Instance targeting in `send-command`: tag filter vs instance-id?** A tag filter (e.g.
    `Name=prog-strength-backend`) fully retires `EC2_HOST` and survives an instance replacement; a
-   hardcoded id is simpler but reintroduces a host-identity secret. Lean: tag filter.
-3. **Customer-managed KMS key for SecureStrings, or the default `aws/ssm` key?** Default key needs no
-   extra grant and is fine for a single-account beta (consistent with the ECR module's "managed key
-   is fine at this scale" stance). Lean: default key; revisit if multi-account ever lands.
-4. **Keep or drop the EC2 key pair after cutover?** Dropping `ssh_key_name` is cleaner but a future
-   instance replacement would come up with no key at all (Session Manager only) — acceptable, but
-   call it out explicitly before removing. Lean: keep the key pair resource, rely on the closed port;
-   separate cleanup later.
+   hardcoded id reintroduces a host-identity value. Lean: tag filter — matches developer's
+   `deploy-manager.yml`.
+2. **One combined secret per service, or split true-secrets from non-sensitive identities?** Lean: one
+   `app-config` JSON blob per service for simplicity (the bucket-name identities are low-sensitivity
+   and already in tfvars/config); split later only if a value needs independent rotation.
+3. **Keep or drop the EC2 key pair after cutover?** Dropping `ssh_key_name` is cleaner but a future
+   instance replacement would come up with Session Manager only — acceptable, but call it out before
+   removing. Lean: keep the key pair resource, rely on the closed port; separate cleanup later.
+
+> Resolved during scoping: **seeding method** — infra-owned containers + automated GitHub→Secrets
+> Manager seed workflow, values never in TF state (per the user's pattern and the developer-repo
+> rule). **Encryption** — default `aws/secretsmanager` KMS key, no customer-managed key at
+> single-account scale. **Storage choice** — Secrets Manager over Parameter Store, for consistency
+> with the account's existing runtime-secret pattern.
