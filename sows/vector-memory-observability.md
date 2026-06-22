@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 depends_on:
   - sows/agent-vector-memory.md
 repos:
@@ -10,7 +10,7 @@ repos:
 
 # Vector Memory Observability
 
-**Status**: Draft · **Last updated**: 2026-06-21
+**Status**: Shipped · **Last updated**: 2026-06-22
 
 ## Introduction
 
