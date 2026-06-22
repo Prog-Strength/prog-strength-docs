@@ -104,10 +104,25 @@ They cannot move to SSM command parameters (Run Command records its parameters i
 CloudTrail — passing secrets that way leaks them). Instead, all backend secrets live in Secrets
 Manager, with a deliberate split of ownership that keeps plaintext out of Terraform state:
 
-- **Terraform (infra) owns the secret *containers*.** One JSON secret per service —
-  `prog-strength-api/app-config`, `prog-strength-mcp/app-config`, `prog-strength-agent/app-config` —
-  created via `aws_secretsmanager_secret`, mirroring the `prog-strength-developer/*` naming. Infra
-  owns the resource, its IAM, and (future) rotation policy: every backend resource stays in one repo.
+- **Terraform (infra) owns the secret *containers*.** One JSON secret per service, named on a
+  `prog-strength-backend/<env>/<service>` schema — `prog-strength-backend/prod/api`,
+  `prog-strength-backend/prod/mcp`, `prog-strength-backend/prod/agent` — created via
+  `aws_secretsmanager_secret`. The naming is deliberate:
+  - **Distinguishable from developer secrets.** The `prog-strength-backend/` prefix reads as clearly
+    separate from `prog-strength-developer/*` (the autonomous-developer's owner-private credentials),
+    so the two secret families never blur together in the console or in IAM ARNs.
+  - **Environment encoded up front.** The `/prod/` segment means a future second environment is just
+    `prog-strength-backend/staging/*` — no rename of the prod secrets, no IAM rework beyond a wider
+    path. Encoding the env now (while there is only one) is free; retrofitting it later is not.
+  - Infra owns the resource, its IAM, and (future) rotation policy: every backend resource stays in
+    one repo.
+- **Each container carries a self-documenting `description`.** The `aws_secretsmanager_secret`
+  `description` states the secret's purpose, that its **values are seeded from GitHub secrets by
+  `prog-strength-infra`'s `seed-secrets.yml` (not managed in Terraform state)**, and which service
+  consumes it — e.g. *"Backend prod app config for the api service. Values seeded from GitHub secrets
+  by prog-strength-infra/seed-secrets.yml; not stored in Terraform state. Consumed by the api
+  container's .env at deploy time."* So anyone landing on the secret in the console understands what
+  it is, where its values come from, and that hand-editing them will be overwritten by the next seed.
 - **Terraform does *not* own the secret *values*.** No `aws_secretsmanager_secret_version` carrying
   real content; values never enter TF state. This honors the rule `prog-strength-developer/
   terraform/secrets.tf` already states explicitly ("committing them to state would be a leak risk").
@@ -117,9 +132,10 @@ Manager, with a deliberate split of ownership that keeps plaintext out of Terraf
   whenever a secret rotates. **This is the only place a secret transits a runner — and only on an
   explicit seed, never on a deploy.**
 - **The host reads secrets via its instance role at deploy time.** The on-host script runs
-  `aws secretsmanager get-secret-value`, parses the JSON with `jq`, and renders `.env` into the same
-  target dir as today. Optional provider keys (FatSecret, USDA, OpenAI/Anthropic) absent from the
-  blob default to empty, preserving today's degrade-to-503 behavior. The runner never sees a value.
+  `aws secretsmanager get-secret-value --secret-id prog-strength-backend/prod/<service>`, parses the
+  JSON with `jq`, and renders `.env` into the same target dir as today. Optional provider keys
+  (FatSecret, USDA, OpenAI/Anthropic) absent from the blob default to empty, preserving today's
+  degrade-to-503 behavior. The runner never sees a value.
 
 This deletes the long `env:`/`envs:` block from every release workflow and removes secrets from the
 deploy path entirely.
@@ -137,13 +153,16 @@ additive change to the seed step, not a redesign.
 
 - **Instance role** (infra, mirroring `modules/ecr`'s attachment): add
   `AmazonSSMManagedInstanceCore` (AWS-managed) so the agent registers the node, plus an inline
-  `secretsmanager:GetSecretValue` scoped to the `prog-strength-*/*` secret ARNs. The default
+  `secretsmanager:GetSecretValue` scoped to `prog-strength-backend/prod/*` — the host reads only its
+  own environment's secrets, never the developer family or a future env. The default
   `aws/secretsmanager` KMS key needs no explicit `kms:Decrypt` grant for same-account use.
 - **OIDC role** (infra, `modules/github_oidc`): the SSM transport actions already exist. Add
   `secretsmanager:CreateSecret` / `TagResource` (the apply pipeline creates the containers) and
   `secretsmanager:PutSecretValue` / `DescribeSecret` (the seed workflow writes values), scoped to
-  `prog-strength-*`. The existing `SecretsManagerDescribe` statement (developer/* only) is widened or
-  joined by a backend statement.
+  `prog-strength-backend/*` so the same role can manage every environment's backend secrets as they
+  are added. This is a separate statement from the existing `SecretsManagerDescribe`
+  (`prog-strength-developer/*`), keeping the two secret families on distinct, independently auditable
+  grants.
 
 ### Closing the door (infra + GitHub)
 
@@ -160,9 +179,11 @@ Once all seven workflows deploy via SSM and Session Manager break-glass is verif
 
 - All seven deploy workflows authenticate via the existing OIDC role and deploy via `aws ssm
   send-command`; none use `appleboy/ssh-action` or the SSH secrets.
-- All backend app secrets live in infra-owned Secrets Manager secrets (`prog-strength-<service>/
-  app-config`), seeded from GitHub secrets by an infra `seed-secrets.yml` workflow, with no secret
-  value ever written to Terraform state and no secret transiting a runner on a deploy.
+- All backend app secrets live in infra-owned Secrets Manager secrets named
+  `prog-strength-backend/<env>/<service>` (env encoded; distinct from `prog-strength-developer/*`),
+  each with a `description` documenting its purpose and infra-seeded origin, seeded from GitHub
+  secrets by an infra `seed-secrets.yml` workflow, with no secret value ever written to Terraform
+  state and no secret transiting a runner on a deploy.
 - The instance role can read those secrets (`GetSecretValue`) and is registered as an SSM managed
   node; the OIDC role can create/seed them and send commands.
 - Inbound port 22 is closed in `prod.tfvars`; AWS Session Manager is the verified break-glass shell.
@@ -187,16 +208,18 @@ Once all seven workflows deploy via SSM and Session Manager break-glass is verif
 ### Secret containers + seeding (prog-strength-infra)
 
 - A `modules/secrets` (or inline in the compute/backend composition) declaring
-  `aws_secretsmanager_secret` for each of `prog-strength-api/app-config`,
-  `prog-strength-mcp/app-config`, `prog-strength-agent/app-config`. No `_version` resource with real
-  values; if a placeholder version is needed to satisfy consumers, guard it with
-  `lifecycle { ignore_changes = [secret_string] }` so the seed workflow's values are never reverted
-  by a later apply.
+  `aws_secretsmanager_secret` for each of `prog-strength-backend/prod/api`,
+  `prog-strength-backend/prod/mcp`, `prog-strength-backend/prod/agent`, each with a `description` (see
+  the Secrets section). Drive the set from a `for_each` over a `{ service => description }` map so a
+  future environment or service is a one-line addition and the `/prod/` segment comes from an `env`
+  variable. No `_version` resource with real values; if a placeholder version is needed to satisfy
+  consumers, guard it with `lifecycle { ignore_changes = [secret_string] }` so the seed workflow's
+  values are never reverted by a later apply.
 - `seed-secrets.yml` (`workflow_dispatch`): assume OIDC role → for each service, assemble the JSON
   blob from `${{ secrets.* }}` and `aws secretsmanager put-secret-value --secret-id
-  prog-strength-<svc>/app-config --secret-string …`. The forwarded-secret list is essentially the
-  `envs:` list being removed from the deploy workflows — it moves here, run on demand instead of per
-  deploy.
+  prog-strength-backend/prod/<service> --secret-string …`. The forwarded-secret list is essentially
+  the `envs:` list being removed from the deploy workflows — it moves here, run on demand instead of
+  per deploy.
 
 ### On-host deploy scripts (prog-strength-infra)
 
@@ -206,7 +229,7 @@ Move the inline bash from each workflow into versioned scripts, e.g. `deploy/api
 1. `cd /home/ubuntu/prog-strength-infra && git fetch --prune && git checkout main && git pull --ff-only`
    (unchanged).
 2. ECR login via instance role (unchanged).
-3. **New:** `aws secretsmanager get-secret-value --secret-id prog-strength-<svc>/app-config
+3. **New:** `aws secretsmanager get-secret-value --secret-id prog-strength-backend/prod/<service>
    --query SecretString --output text | jq -r 'to_entries[] | "\(.key)=\(.value)"' > .env`
    (`umask 077`, same target dir as today; absent optional keys simply don't appear → empty).
 4. `docker compose pull/down/up` with the same `-f` merge of the monitoring compose file; echo +
@@ -266,7 +289,7 @@ until Checkpoint 3.
 4. After all seven workflows have a green SSM run **and** 22 is confirmed closed without breakage:
    delete `EC2_SSH_KEY` and `EC2_HOST` org secrets and scrub them from
    `prog-strength-api/DEPLOYMENT.md`, `prog-strength-mcp/README.md`, `prog-strength-infra/README.md`,
-   and the agent docs. (The app-config GitHub secrets stay — they seed Secrets Manager.)
+   and the agent docs. (The app config GitHub secrets themselves stay — they seed Secrets Manager.)
 
 ## Failure / Rollback
 
@@ -285,8 +308,9 @@ until Checkpoint 3.
    hardcoded id reintroduces a host-identity value. Lean: tag filter — matches developer's
    `deploy-manager.yml`.
 2. **One combined secret per service, or split true-secrets from non-sensitive identities?** Lean: one
-   `app-config` JSON blob per service for simplicity (the bucket-name identities are low-sensitivity
-   and already in tfvars/config); split later only if a value needs independent rotation.
+   JSON blob per service (`prog-strength-backend/prod/<service>`) for simplicity (the bucket-name
+   identities are low-sensitivity and already in tfvars/config); split into finer-grained secrets
+   under the same path only if a value needs independent rotation.
 3. **Keep or drop the EC2 key pair after cutover?** Dropping `ssh_key_name` is cleaner but a future
    instance replacement would come up with Session Manager only — acceptable, but call it out before
    removing. Lean: keep the key pair resource, rely on the closed port; separate cleanup later.
@@ -295,4 +319,7 @@ until Checkpoint 3.
 > Manager seed workflow, values never in TF state (per the user's pattern and the developer-repo
 > rule). **Encryption** — default `aws/secretsmanager` KMS key, no customer-managed key at
 > single-account scale. **Storage choice** — Secrets Manager over Parameter Store, for consistency
-> with the account's existing runtime-secret pattern.
+> with the account's existing runtime-secret pattern. **Naming schema** —
+> `prog-strength-backend/<env>/<service>` (`/prod/` today), chosen to read as distinct from
+> `prog-strength-developer/*` and to encode the environment so multi-env is an additive change; each
+> container carries a `description` documenting purpose + infra-seeded origin.
