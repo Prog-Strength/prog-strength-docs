@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 depends_on:
   - sows/agent-vector-memory.md
   - sows/centralized-api-config.md
@@ -10,7 +10,7 @@ repos:
 
 # Multi-Source Agent Memory
 
-**Status**: Draft · **Last updated**: 2026-06-21
+**Status**: Shipped · **Last updated**: 2026-06-22
 
 ## Introduction
 
