@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-mcp
@@ -9,7 +9,7 @@ repos:
 
 # Holistic Training Analysis: The `analyze_training` Intent and the Training Snapshot
 
-**Status**: Draft · **Last updated**: 2026-06-21
+**Status**: Shipped · **Last updated**: 2026-06-22
 
 ## Introduction
 
