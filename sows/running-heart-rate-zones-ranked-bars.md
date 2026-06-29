@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Running Heart-Rate Zones — Ranked Bars
 
-**Status**: Draft · **Last updated**: 2026-06-29
+**Status**: Shipped · **Last updated**: 2026-06-29
 
 ## Introduction
 
