@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-docs
   - prog-strength-infra
@@ -10,7 +10,7 @@ repos:
 
 # SSM-Based Deploys: Retire the SSH Deploy Key
 
-**Status**: Draft · **Last updated**: 2026-06-21
+**Status**: Shipped · **Last updated**: 2026-06-22
 
 ## Introduction
 
