@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.4.1 · **Last updated**: 2026-06-19
+**Status**: v0.4.2 · **Last updated**: 2026-06-29
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -93,6 +93,22 @@ a light background.
   bar). The ramp is **additive to the existing `--discipline-lift-*` triplet**
   (`bg` / `fg` / `dot`), not a replacement; it lives alongside it in
   `app/globals.css` (with `--color-discipline-lift-1..4` Tailwind aliases).
+
+- **HR-zone scale**: the five `--zone-1..5` tokens are a **separable calm
+  five-tone scale** — `--zone-1` `#6b7280` (slate), `--zone-2` `#6f93c2`
+  (dusty blue), `--zone-3` `#6fb39a` (muted teal-green), `--zone-4` `#d0a86e`
+  (muted amber), `--zone-5` `#cc8077` (dusty coral). It is **cool→warm**
+  (low HR intensity reads cool, max reads warm — the Garmin mental model
+  without the saturated stoplight) with each hue held at the **status-tone
+  saturation register**, so zones stay legible against each other and native to
+  oura-calm. The fills encode *intensity, not value judgment* (coral = hottest
+  zone, not "bad") and are reused for the **saturation register only** — they
+  do not alias `--success`/`--danger`/`--warning`, and **no zone is the
+  accent** (zones never read as selection). Consumed only by the running-detail
+  HR-zones widget. This **supersedes the periwinkle single-hue ramp** (whose
+  steps were near-indistinguishable and whose Z5 collided with the accent) —
+  provenance
+  [`sows/running-heart-rate-zones-ranked-bars.md`](sows/running-heart-rate-zones-ranked-bars.md).
 
 ### Typography
 
@@ -201,9 +217,23 @@ State things honestly so a `greenfield` DX knows where it has room.
   live, mobility / core reserved) and the "activity type owns the color, status
   is shape + badge" rule, centralized behind `activityColors()`:
   [`sows/calendar-event-detail-and-activity-colors.md`](sows/calendar-event-detail-and-activity-colors.md).
+- **HR-zone scale** — the separable cool→warm `--zone-1..5` five-tone scale
+  (status-tone saturation, distinct from the accent), superseding the
+  periwinkle ramp, alongside the running-detail HR-zones widget's rebuild into
+  ranked per-zone bars:
+  [`sows/running-heart-rate-zones-ranked-bars.md`](sows/running-heart-rate-zones-ranked-bars.md).
 
 ## Changelog
 
+- **v0.4.2** (2026-06-29) — retuned the HR-zone scale (`--zone-1..5`) from the
+  near-identical periwinkle single-hue ramp to a **separable cool→warm
+  five-tone scale** (slate → dusty blue → muted teal-green → muted amber →
+  dusty coral) at the status-tone saturation register, distinct from the accent
+  (the old Z5 == `--accent` collision is retired). Calm and dark-native — not a
+  green→red heat map — so zones stay legible at small fill widths. Consumed only
+  by the running-detail HR-zones widget, now rendered as ranked per-zone bars
+  ([`sows/running-heart-rate-zones-ranked-bars.md`](sows/running-heart-rate-zones-ranked-bars.md)).
+  No re-tone of the v0.4 foundation.
 - **v0.4.1** (2026-06-19) — added the four-stop **lift intensity ramp**
   (`--discipline-lift-1..4`, dim → bright steel-blue, tier 4 = `--discipline-lift-fg`)
   as the canonical encoding of graded intensity, additive to the existing
