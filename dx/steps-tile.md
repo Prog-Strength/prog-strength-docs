@@ -1,6 +1,7 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idiom: micro-bars-goal-line
 surface: steps-tile
 idioms:
   - micro-bars-goal-line
@@ -23,7 +24,11 @@ repos:
 
 # DX: Steps Tile
 
-**Status**: Draft · **Last updated**: 2026-07-02
+**Status**: Selected (`micro-bars-goal-line`) · **Last updated**: 2026-07-03
+
+> **Selected:** `micro-bars-goal-line` (DX comparison PR
+> Prog-Strength/prog-strength-web#106, closed un-merged). Built for real by
+> [`sows/steps-tile-micro-bars-goal-line.md`](../sows/steps-tile-micro-bars-goal-line.md).
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
