@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Running Detail Metric Alignment
 
-**Status**: Draft · **Last updated**: 2026-07-03
+**Status**: Shipped · **Last updated**: 2026-07-03 · api PR #67 · web PR #110
 
 > Cross-repo SOW. Moves the running-detail derivation (splits, pace-strip
 > summary, intervals) server-side so every number on `/running/[id]` is
@@ -161,8 +161,15 @@ I2  |Σ split.time − duration_seconds|               ≤ 1 s
 I3  ∀ split: |pace − time/distance|                 ≤ 0.5 s   (identity)
 I4  |Σ(pace·dist)/Σdist − avg_pace|                 ≤ 1 s     (weighted mean)
 I5  |avg_pace_sec_per_km − duration/(dist/1000)|    ≤ 0.5 s   (stored vs recomputed)
-I6  strip.fastest ≤ best_pace_sec_per_unit ≤ fastest-split pace  (+1 s slack;
-    window-size ordering: sample ⊆ rolling unit ⊆ aligned full split)
+I6  strip.fastest ≤ best_pace_sec_per_unit ≤ fastest-split pace  (+15 s slack;
+    window-size ordering: sample ⊆ rolling unit ⊆ aligned full split. The
+    rolling best uses the same greedy tightest-window scan as ingest, which
+    is approximate on coarse samples — property testing observed up to
+    ~9.5 s/unit of lag vs an aligned split, so the slack is 15 s, wide
+    enough to stay quiet on real streams yet far below the tens-to-hundreds
+    of seconds a genuine regression produces. Sub-bucket "full" splits are
+    excluded: the rolling window never evaluates spans shorter than one
+    unit, so they aren't comparable candidates.)
 I7  Σ zone.time_seconds ≤ duration + 1 s; |Σ zone.time_pct − 1| ≤ 0.01
 ```
 
@@ -193,9 +200,12 @@ for running activities:
 }
 ```
 
-`PATCH` (environment) and `POST /calibrate` return the same enriched detail
-shape they return today, now including the derived blocks, so the client can
-keep replacing the whole session object.
+`POST /calibrate` returns the enriched detail shape including the derived
+blocks (it shares `buildDetailDTO` with the GET), so the client replaces the
+whole session object. `PATCH` (environment) keeps returning the summary DTO
+**without** trackpoints or derived blocks — an environment change never
+rescales distance, so the client's spread-merge preserves its existing
+trackpoints and derived blocks, which remain valid.
 
 ### Web
 
