@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: steps-tile
 idioms:
   - micro-bars-goal-line
@@ -23,7 +23,7 @@ repos:
 
 # DX: Steps Tile
 
-**Status**: Draft · **Last updated**: 2026-07-02
+**Status**: Awaiting selection · **Last updated**: 2026-07-03
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
