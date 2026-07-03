@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Dashboard Steps Tile — Micro-Bars + Goal Line
 
-**Status**: Ready for Implementation · **Last updated**: 2026-07-03
+**Status**: Shipped · **Last updated**: 2026-07-03
 
 > Frontend SOW. It implements a chosen DX variant and therefore inherits that DX's
 > `scope` — here **`in-system`**. The visual foundation (design-system **v0.4**,
