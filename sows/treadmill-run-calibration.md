@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -10,7 +10,7 @@ repos:
 
 # Treadmill Run Calibration
 
-**Status**: Draft · **Last updated**: 2026-07-03
+**Status**: Shipped · **Last updated**: 2026-07-03
 
 > Cross-repo SOW. Adds indoor/treadmill tagging, post-ingest distance calibration,
 > and a uniform-scale recompute of pace and trackpoints so the running detail page
