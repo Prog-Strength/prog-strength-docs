@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Steps Log — Week-Accordion
 
-**Status**: Draft · **Last updated**: 2026-07-06
+**Status**: Shipped · **Last updated**: 2026-07-06
 
 > Frontend SOW. It implements the chosen variant from
 > [`dx/steps-log`](../dx/steps-log.md) and therefore inherits that DX's
