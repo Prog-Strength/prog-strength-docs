@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: steps-log
 idioms:
   - week-accordion
@@ -24,7 +24,7 @@ repos:
 
 # DX: Steps Log
 
-**Status**: Draft · **Last updated**: 2026-07-05
+**Status**: Awaiting selection · **Last updated**: 2026-07-06
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
