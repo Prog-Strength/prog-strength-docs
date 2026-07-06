@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: steps-log
 idioms:
   - week-accordion
@@ -24,7 +24,12 @@ repos:
 
 # DX: Steps Log
 
-**Status**: Draft · **Last updated**: 2026-07-05
+**Status**: Selected (`week-accordion`) · **Last updated**: 2026-07-06
+
+> **Selected:** `week-accordion` (DX comparison PR
+> [Prog-Strength/prog-strength-web#111](https://github.com/Prog-Strength/prog-strength-web/pull/111),
+> to be closed un-merged). Built for real by
+> [`sows/steps-log-week-accordion.md`](../sows/steps-log-week-accordion.md).
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
