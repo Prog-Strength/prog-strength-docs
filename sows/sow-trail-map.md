@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Trail Map Rendering
 
-**Status**: Draft · **Last updated**: 2026-07-17
+**Status**: Shipped · **Last updated**: 2026-07-17
 
 > Frontend work on `/running/[id]` conforms to the design system
 > ([`design-system.md`](../design-system.md)): dark soft near-black surfaces,
