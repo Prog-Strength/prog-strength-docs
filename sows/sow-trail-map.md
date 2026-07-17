@@ -309,4 +309,3 @@ Non-Goals around recomputing on PATCH.
 3. **Supersession edit to `run-route-geometry-capture.md`.** *Tentative lean:*
    on approval of this SOW, set that draft's status to superseded with a pointer
    here (docs-only commit, can land with this file).
-)
