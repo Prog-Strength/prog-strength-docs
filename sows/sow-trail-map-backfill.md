@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Trail Map Route Backfill
 
-**Status**: Draft · **Last updated**: 2026-07-17
+**Status**: Shipped · **Last updated**: 2026-07-17
 
 > **Prerequisite:** [`sows/sow-trail-map.md`](sow-trail-map.md) must be
 > implemented and deployed first (schema columns, ingest-path RDP /
