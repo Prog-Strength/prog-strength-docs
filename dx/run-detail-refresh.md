@@ -1,6 +1,7 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idiom: session-recap-parity
 surface: run-detail-refresh
 idioms:
   - session-recap-parity
@@ -23,7 +24,14 @@ repos:
 
 # DX: Run Detail Refresh
 
-**Status**: Draft · **Last updated**: 2026-07-17
+**Status**: Selected · **Last updated**: 2026-07-18
+
+> **Selected: `session-recap-parity`** (2026-07-18). The owner picked the
+> workout-detail-parity idiom — make `/running/[id]` read like `/workouts/[id]`
+> so a lifter and a runner recognize the same product. It is built for real in
+> [`sows/run-detail-session-recap-parity.md`](../sows/run-detail-session-recap-parity.md).
+> The other four idioms are not built; DX PR #115 is closed, never merged, and
+> the `design-explore/run-detail-refresh` route ships no production code.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
