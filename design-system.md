@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.4.2 · **Last updated**: 2026-06-29
+**Status**: v0.4.3 · **Last updated**: 2026-07-18
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -168,6 +168,49 @@ field, periwinkle accent, and the 14px panel default), not rewritten.
 - **Message bubbles**: user = periwinkle accent; assistant = raised surface.
 - **List / rail items**: rounded rows; active = accent-soft.
 
+### Activity session-recap (activity detail grammar)
+
+The shared header-and-body grammar for **activity detail surfaces** — workout
+detail (`/workouts/[id]`) and run detail (`/running/[id]`) — so a lifter and a
+runner opening either back-to-back recognize the same product. A detail page
+opens as a **session**, not a metrics dashboard: it leads with story, and the
+numbers support rather than lead. Structure, not new tokens — this is a
+composition convention conforming to v0.4.2.
+
+- **Editorial lead**, top to bottom:
+  - **Date kicker** — a tiny uppercase, wide-tracked metadata line (day · date ·
+    time) in `--faint`. Quiet — it locates the session, it doesn't shout.
+  - **Session title** — the session name at a large display scale (~`text-4xl`),
+    click-to-edit in place (the inline-edit idiom), with a discipline badge
+    beside it where relevant (e.g. the treadmill badge on an indoor run).
+  - **Notes as prose** — the athlete's free-text note rendered as first-class
+    reading prose (`whitespace-pre-wrap`, generous leading), or — when empty — a
+    dashed *"how did this feel?"* affordance that opens an inline editor. Notes
+    are content, not a stat cell.
+- **Quiet metric strip** — a `border-y` definition list of the few load-bearing
+  numbers (distance · time · pace · …), not a wall of equal tiles. Values sit in
+  tight numeric tracking over small `--faint` uppercase labels; secondary
+  extremes (best pace, max HR) demote into their recap's subtitle rather than
+  taking a cell.
+- **Section kickers** — each body beat (the work/miles, the recaps, time-in-zones)
+  opens with a small uppercase, wide-tracked kicker in the **discipline hue**
+  (`--discipline-<type>-dot`), the same register as the reference surface's
+  section labels. Activity color marks the beats; **`--accent` stays edit/focus
+  chrome only** (name edit, the notes affordance, links) and is never a section
+  or series hue (the "activity ≠ selection" rule).
+- **Editorial vertical rhythm** — generous gaps between beats (overview → media →
+  work → recaps → zones), a single reading column (~`max-w-2xl`). Whoop/Athletic
+  calm, not Garmin density. Beats with no data are **omitted whole** (no empty
+  frames), never rendered as an empty placeholder.
+
+First instances: **workout detail** (the cohesion reference) and **run detail**
+(provenance
+[`sows/run-detail-session-recap-parity.md`](sows/run-detail-session-recap-parity.md)).
+The **synced metric stack** — conventions for multi-series run charts (shared
+distance axis, honest dropout gaps, `--discipline-*` / `--zone-*` series token
+mapping) — is applied by that SOW's recap charts but not yet generalized here;
+codify it when a second multi-series surface lands.
+
 ### Voice
 
 Coaching tone. Consistency and streak framing are a first-class product element
@@ -222,9 +265,24 @@ State things honestly so a `greenfield` DX knows where it has room.
   periwinkle ramp, alongside the running-detail HR-zones widget's rebuild into
   ranked per-zone bars:
   [`sows/running-heart-rate-zones-ranked-bars.md`](sows/running-heart-rate-zones-ranked-bars.md).
+- **Activity session-recap** — the shared activity-detail composition grammar
+  (date kicker → large title → notes-as-prose → quiet metric strip →
+  discipline-hue section kickers → editorial rhythm), established by the run
+  detail rebuild reading like workout detail and codified here as the convention
+  for activity detail surfaces:
+  [`sows/run-detail-session-recap-parity.md`](sows/run-detail-session-recap-parity.md) ·
+  [`dx/run-detail-refresh.md`](dx/run-detail-refresh.md) (`session-recap-parity`).
 
 ## Changelog
 
+- **v0.4.3** (2026-07-18) — added the **activity session-recap** grammar under
+  Decided: the shared header-and-body composition for activity detail surfaces
+  (kicker → large title → notes-as-prose → quiet metric strip → discipline-hue
+  section kickers → editorial rhythm), the convention the run-detail-refresh DX
+  deferred to its downstream SOW. Structure only — no token, palette, or type
+  change; conforms to v0.4.2. Provenance
+  ([`sows/run-detail-session-recap-parity.md`](sows/run-detail-session-recap-parity.md));
+  first instances are workout detail and run detail.
 - **v0.4.2** (2026-06-29) — retuned the HR-zone scale (`--zone-1..5`) from the
   near-identical periwinkle single-hue ramp to a **separable cool→warm
   five-tone scale** (slate → dusty blue → muted teal-green → muted amber →
