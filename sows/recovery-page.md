@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Recovery Page & Sidebar Tab
 
-**Status**: Draft · **Last updated**: 2026-07-23
+**Status**: Shipped · **Last updated**: 2026-07-23
 
 ## Introduction
 
