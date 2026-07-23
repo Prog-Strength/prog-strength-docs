@@ -85,7 +85,7 @@ Two new tables in `038_user_whoop_connection.sql` and `039_user_whoop_recovery.s
 
 Only records with `score_state = SCORED` are upserted; `PENDING` and `UNSCORABLE` are skipped (a later re-score arrives as another webhook and upserts normally). Whoop can update an already-scored day; the upsert overwrites — latest wins.
 
-**Date derivation.** A recovery record carries no timezone; its cycle does. The sync fetches `GET /v2/recovery` and `GET /v2/cycle` over the same window and joins on `cycle_id`; `date` is the cycle's `start` adjusted by the cycle's `timezone_offset`. This pins the recovery to the day the user woke up into, in the timezone they were actually in.
+**Date derivation.** A recovery record carries no timezone; its cycle does. The sync fetches `GET /v2/recovery` and `GET /v2/cycle` over the same window and joins on `cycle_id`; `date` is the recovery's `created_at` (the instant Whoop scored it — wake time plus phone sync) adjusted by the cycle's `timezone_offset`. This pins the recovery to the day the user woke up into, in the timezone they were actually in. (Corrected 2026-07-23, api PR #76: the original spec derived from the cycle's `start`, but Whoop cycles run sleep-onset → sleep-onset, so cycle start is the previous evening's bedtime and every recovery landed one day early — "today" never had data.)
 
 ### Token Crypto Extraction (`prog-strength-api`)
 
