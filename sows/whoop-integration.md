@@ -155,7 +155,7 @@ New `src/prog_strength_mcp/whoop.py` following the `steps.py` template: a `get_w
 
 One-time manual setup (owner: Jimmy), documented here because it cannot be automated:
 
-1. Create the app in the Whoop Developer Dashboard; register redirect URLs for prod (`https://<api-host>/auth/whoop/callback`) and local dev (`http://localhost:8080/auth/whoop/callback`).
+1. Create the app in the Whoop Developer Dashboard; register redirect URLs for prod (`https://<api-host>/auth/whoop/callback`) and local dev (`http://localhost:8080/auth/whoop/callback`). The dashboard requires a privacy policy URL — `https://progstrength.fitness/privacy` (shipped separately in web PR #118).
 2. Register the webhook URL (`https://<api-host>/webhooks/whoop`) in the dashboard, v2 model.
 3. Generate `WHOOP_TOKEN_ENC_KEY` (32 random bytes, base64) and add it plus the client ID/secret to the `api` GitHub secrets; run the seed-secrets workflow.
 
