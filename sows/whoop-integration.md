@@ -22,7 +22,7 @@ The Google Calendar sync feature is the direct blueprint: `internal/calendarsync
 
 ## Proposed Solution
 
-A user clicks **Connect** on a new Whoop card under Settings → Integrations and completes Whoop's OAuth consent (`read:recovery read:profile offline`). The API stores the token pair encrypted at rest in a new `user_whoop_connection` row, captures the user's Whoop user ID (required to route webhooks), and immediately backfills the last 30 days of recoveries into a new `user_whoop_recovery` table — one row per user per calendar date, shaped like `user_steps`.
+A user clicks **Connect** on a new Whoop card under Settings → Integrations and completes Whoop's OAuth consent (`read:recovery read:cycles read:profile offline`). The API stores the token pair encrypted at rest in a new `user_whoop_connection` row, captures the user's Whoop user ID (required to route webhooks), and immediately backfills the last 30 days of recoveries into a new `user_whoop_recovery` table — one row per user per calendar date, shaped like `user_steps`.
 
 From then on, ingestion is push-driven. Whoop POSTs to a public `POST /webhooks/whoop` endpoint whenever a recovery is scored. The handler validates the HMAC signature and treats the event as a **poke, not a payload**: rather than dereferencing the record ID in the event (which in v2 is a sleep UUID, not a recovery ID), it re-syncs a small recent window of recoveries for that user via `GET /v2/recovery`. Idempotent upserts make Whoop's five-retry delivery, duplicate events, and out-of-order arrival all trivially safe. No scheduler, no queue, no polling — the first background-ish ingestion in the stack costs zero new infrastructure.
 
@@ -97,7 +97,7 @@ New packages `internal/whoopconn` (model + repository, cf. `calendarconn`) and `
 
 | Route | Mount | Behavior |
 | --- | --- | --- |
-| `GET /auth/whoop/connect` | authed | Builds the authorize URL (`https://api.prod.whoop.com/oauth/oauth2/auth`) with scopes `read:recovery read:profile offline` and the HMAC-bound CSRF state pattern from `calendarsync/oauth.go` (Whoop requires state ≥ 8 chars — the existing scheme already exceeds this). Accepts `return_to` for the post-connect redirect, validated same-origin as calendar does. |
+| `GET /auth/whoop/connect` | authed | Builds the authorize URL (`https://api.prod.whoop.com/oauth/oauth2/auth`) with scopes `read:recovery read:cycles read:profile offline` and the HMAC-bound CSRF state pattern from `calendarsync/oauth.go` (Whoop requires state ≥ 8 chars — the existing scheme already exceeds this). Accepts `return_to` for the post-connect redirect, validated same-origin as calendar does. |
 | `GET /auth/whoop/callback` | public | Validates state, exchanges the code at `https://api.prod.whoop.com/oauth/oauth2/token`, fetches `GET /v2/user/profile/basic` for `whoop_user_id`, upserts the connection as `connected`, kicks off the 30-day backfill (best-effort, inline — failure logs and leaves the connection usable; the next webhook or reconnect fills the gap), redirects to `return_to`. |
 | `GET /me/whoop/connection` | authed | Status, `connected_at` — shape of `GET /me/calendar/connection`. |
 | `DELETE /me/whoop/connection` | authed | Calls Whoop `DELETE /v2/user/access` (best-effort), marks the row `revoked`, wipes token columns. Recovery rows untouched. |
