@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -10,7 +10,7 @@ repos:
 
 # Whoop Integration (Recovery v1)
 
-**Status**: Draft · **Last updated**: 2026-07-21
+**Status**: Shipped · **Last updated**: 2026-07-22
 
 ## Introduction
 
