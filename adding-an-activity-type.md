@@ -221,11 +221,12 @@ fails — it's the alarm, not just documentation.
 - **Dashboard streak days**: the dashboard's `streakDates` lights a local day
   for any non-strength session the same way, no per-type switch.
   (`TestContract_BaseOnlyType_LightsDashboardStreak`)
-- **MCP `log_activity` (forthcoming)**: once stage 2 of the unified-activity-model
-  rollout lands generic `log_activity`/`list_activities` MCP tools, those
-  tools drive the same registry-backed `/activities` surface — a new type
-  picked up there needs no MCP-side change either. Not shipped yet as of this
-  writing; noted here so this doc doesn't need a rewrite when it lands.
+- **MCP `log_activity`/`list_activities`**: the generic MCP tools
+  (`prog-strength-mcp`, `src/prog_strength_mcp/activities.py`) pass
+  `activity_type` straight through to the registry-backed `/activities`
+  surface — an unknown type surfaces the API's 422 listing the valid set, so
+  a newly registered type is loggable and listable through the agent with no
+  MCP-side change.
 
 ## What does NOT come free
 
@@ -327,22 +328,32 @@ and soft `DELETE`. Separate tests in the same file drive the timeline-card
 and snapshot/dashboard paths against the same registry. Read the full file
 for the exact assertions — this doc quotes only the descriptor.
 
-## Reference: the shim period
+## Reference: legacy surfaces (post-cleanup end state)
 
-`prog-strength-api` is mid-migration off a legacy dual-domain model. Two
-things worth knowing before you touch this code:
+The unified-activity-model rollout ran in five stages; during stages 1–4 the
+legacy `/workouts/*` routes lived on as compatibility shims so web, mobile,
+and MCP could migrate without a mid-flight break. Stage 5 removed them. Two
+things worth knowing about the end state before you touch this code:
 
-- **`/workouts/*` is a deprecated compatibility shim**, kept only so web,
-  mobile, and MCP can migrate to `/activities` without a mid-flight break.
-  `internal/server/server.go` marks the mount point
-  `// Deprecated: stage-5 cleanup removes these /workouts shims once MCP,
-  web, and mobile are on /activities`. Don't build new functionality against
-  `/workouts`; it goes away in the unified-activity-model rollout's stage 5.
-- **`completed_session_kind` (on `planned_workout`) is being collapsed in
-  stage 5.** Until then, lookups by completed session are deliberately
-  **kind-agnostic** — `planned_workout.Repository.GetByCompletedSession`
-  matches on `completed_session_id` alone, ignoring which of `'workout'` /
-  `'activity'` the row says, because both wrappers ultimately point at the
-  same unified `activities` row. If you're touching planned-workout
-  reconciliation for a new type, match that kind-agnostic pattern rather than
-  adding a new `completed_session_kind` value.
+- **`/workouts/*` CRUD routes no longer exist — they 404.** `/activities` is
+  the only session surface. The strength handler's `Mount`
+  (`internal/activity/strength/handler.go`) keeps only the surfaces that
+  never lived under `/workouts` (`/personal-records*`, headline exercises);
+  strength create/update/read/delete and its type-specific routes reach the
+  unified surface through the strength descriptor's `Create`/`Update` seams
+  and `MountRoutes`, same as any other type. Never build anything against
+  `/workouts`.
+- **`planned_workouts.completed_session_kind` is collapsed.** Migration
+  `043_planned_workout_drop_completed_kind.sql` dropped the column: every
+  session is one row in the unified `activities` table with a globally
+  unique id, so `completed_session_id` alone identifies the completing
+  session, and lift-vs-run plan routing derives from that session's
+  `activity_type` via the `ActivityKindResolver` seam
+  (`internal/planned_workout/service.go`, implemented over the activities
+  repo in server wiring). For backward compatibility with older deployed
+  clients, `POST /planned-workouts/{id}/complete` and
+  `GET /planned-workouts/by-session` still **accept** a `session_kind` field
+  in requests but **ignore** it — accept-and-ignore, never reject. If you're
+  wiring planned-workout reconciliation for a new type, there is no kind
+  discriminator to extend: completion matching is by session id, and kind
+  derivation is by `activity_type` through the resolver.
