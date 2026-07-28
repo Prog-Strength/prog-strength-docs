@@ -336,7 +336,7 @@ things worth knowing before you touch this code:
   mobile, and MCP can migrate to `/activities` without a mid-flight break.
   `internal/server/server.go` marks the mount point
   `// Deprecated: stage-5 cleanup removes these /workouts shims once MCP,
-  web, mobile are migrated`. Don't build new functionality against
+  web, and mobile are on /activities`. Don't build new functionality against
   `/workouts`; it goes away in the unified-activity-model rollout's stage 5.
 - **`completed_session_kind` (on `planned_workout`) is being collapsed in
   stage 5.** Until then, lookups by completed session are deliberately
