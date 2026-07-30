@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.4.3 · **Last updated**: 2026-07-18
+**Status**: v0.4.4 · **Last updated**: 2026-07-30
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -28,6 +28,22 @@
 - **Dark theme** for all app surfaces. (A light theme was explicitly rejected
   for in-app surfaces during the calendar and chat explorations.)
 
+  > **One carve-out: aerial imagery** (v0.4.4). The route map's Satellite and
+  > Satellite + Trails basemaps are photographs, and a photograph has no theme
+  > — there is no dark variant of a mountainside to choose. The carve-out is
+  > **scoped to the basemap pixels only**: every element we draw over them
+  > (route, markers, switcher, attribution) stays on system tokens, using the
+  > `--map-*` chrome family precisely so the app's own surfaces do not have to
+  > go light to stay legible.
+  >
+  > This is **not** a precedent for light surfaces elsewhere. The test it
+  > passes is that the light content is *photographic source data the user
+  > asked to see*, not a design choice about our own chrome. Every other
+  > basemap in the registry is dark, and a registry test enforces that each
+  > style declares itself either `dark` or `imagery` — so a light *cartographic*
+  > basemap cannot arrive without this decision being made again, explicitly.
+  > Provenance: [`sows/outdoor-hiking-maps.md`](sows/outdoor-hiking-maps.md).
+
 ## Decided
 
 ### Theme
@@ -51,19 +67,35 @@ a light background.
 - **Macro tints**: protein `#34d399` (green), fat `#fbbf24` (amber), carb
   `#60a5fa` (blue), each on a ~13%-alpha background. For nutrition macro chips.
   **Unchanged** — they await nutrition's own migration SOW.
-- **Activity tonal hues**: per-discipline desaturated hues — **run** and **lift**
-  today, the system **extensible** to mobility/core later — toned to sit on the
-  dark near-black surface and **kept distinct from the periwinkle accent** (an
-  activity must never read as selection / "today"). Each discipline has a
-  three-token set — `bg` (tint fill), `fg` (text), `dot` (accent: left bar / pill
-  border / focus ring):
+- **Activity tonal hues**: per-discipline desaturated hues — **run**, **lift**
+  and **hike** today, the system **extensible** to mobility/core later — toned
+  to sit on the dark near-black surface and **kept distinct from the periwinkle
+  accent** (an activity must never read as selection / "today"). Each discipline
+  has a three-token set — `bg` (tint fill), `fg` (text), `dot` (accent: left bar
+  / pill border / focus ring):
 
   | Discipline | `--discipline-*-bg` | `--discipline-*-fg` | `--discipline-*-dot` |
   | --- | --- | --- | --- |
-  | **run** (green-teal) | `#16302a` | `#82d3b8` | `#46b893` |
-  | **lift** (steel-blue) | `#1a2a3c` | `#8cbce8` | `#5598d8` |
-  | mobility *(reserved)* | `#1f3330` | `#8fd6c4` | `#4fbfa3` |
-  | core *(reserved)* | `#2c2440` | `#c2adf0` | `#9a7fe0` |
+  | **run** (sage) | `#16241f` | `#9cc7b8` | `#7fae9e` |
+  | **lift** (periwinkle) | `#1b1f2e` | `#aab4dd` | `#9aa6d6` |
+  | **hike** (clay) | `#2a201c` | `#c9a690` | `#b08e77` |
+  | mobility *(reserved)* | `#182622` | `#8fc4b6` | `#6fae9b` |
+  | core *(reserved)* | `#211d2e` | `#b4a9d6` | `#8f82c0` |
+
+  > **Every value above was corrected in v0.4.4 to match `app/globals.css`.**
+  > The table had drifted from the stylesheet in all five rows — the printed
+  > run hue (`#16302a`/`#82d3b8`/`#46b893`) was a full step more saturated than
+  > the shipped one, and hike had never been recorded at all. A
+  > decided-conventions doc that disagrees with the code is worse than no doc,
+  > so the stylesheet is the authority here and the table now follows it.
+  >
+  > **Known contradiction, deliberately left standing:** `--discipline-lift-dot`
+  > is `#9aa6d6`, which **is** `--accent` exactly — so the "activity hues stay
+  > distinct from the accent" rule above is not currently true of lift. This is
+  > recorded rather than quietly corrected because resolving it is a design
+  > decision (re-tone lift's dot, or retire the v0.3 rule as stated), not a
+  > transcription fix. Raised as Open Question 4 of
+  > [`sows/hiking-activity-type.md`](sows/hiking-activity-type.md); still open.
 
   **Activity type owns activity color** — a session reads in its discipline hue
   on every surface (month-grid pill, timeline rail), and lifecycle *status*
@@ -72,6 +104,23 @@ a light background.
   stays app-chrome/selection only). The mapping lives behind a single resolver
   (`lib/activity-colors.ts` → `activityColors(type)`) so a future
   user-customizable palette is a one-place change.
+
+- **Map chrome** (`--map-*`): the one surface in the app that renders over a
+  canvas whose luminance we do **not** control — a pale topographic basemap, an
+  aerial photograph. No member of the neutral ramp survives there: `--surface`
+  is invisible over imagery and `--border` washes out over a snowfield. Three
+  tokens, consumed only by the activity route map:
+
+  | Token | Value | Purpose |
+  | --- | --- | --- |
+  | `--map-chrome-bg` | `rgba(10,11,13,0.72)` | Scrim behind the basemap switcher and attribution. Deliberately a translucent near-black rather than a ramp surface: it has to hold a legible label over **both** a sunlit glacier and a dark forest canopy. |
+  | `--map-chrome-fg` | `#d8dae0` | Chrome label colour — a step brighter than `--foreground`, which is tuned for the calm dark field, not for competing with imagery. |
+  | `--map-route-casing` | `rgba(8,9,11,0.85)` | The dark under-stroke beneath the route line. **Not** `--background`: it exists to darken the canvas *under* the route so the discipline hue separates from terrain, and matching a panel colour would make it disappear on the Dark basemap, where the canvas already is `--background`. |
+
+  The **route stroke itself is the discipline hue**, never `--accent` — the
+  route is a data series, and the "activity ≠ selection" rule applies to it
+  exactly as it does to a chart. The switcher's active pill *does* use
+  `--accent`, correctly: that is a selection control.
 
 - **Lift intensity ramp**: a four-stop ramp of the **lift** steel-blue hue —
   the **canonical encoding of graded intensity**, for any graphic that shades a
@@ -257,9 +306,15 @@ State things honestly so a `greenfield` DX knows where it has room.
   [`sows/activities-page-redesign.md`](sows/activities-page-redesign.md) ·
   [`dx/activities-page.md`](dx/activities-page.md) (`oura-calm-minimal`).
 - **Activity palette** — the enumerated `--discipline-*` token sets (run / lift
-  live, mobility / core reserved) and the "activity type owns the color, status
-  is shape + badge" rule, centralized behind `activityColors()`:
+  / hike live, mobility / core reserved) and the "activity type owns the color,
+  status is shape + badge" rule, centralized behind `activityColors()`:
   [`sows/calendar-event-detail-and-activity-colors.md`](sows/calendar-event-detail-and-activity-colors.md).
+  The **hike** clay set was added by
+  [`sows/hiking-activity-type.md`](sows/hiking-activity-type.md) and recorded
+  here in v0.4.4.
+- **Map chrome** — the `--map-*` family and the aerial-imagery carve-out from
+  the dark-theme Fixed Point, for the activity route map:
+  [`sows/outdoor-hiking-maps.md`](sows/outdoor-hiking-maps.md).
 - **HR-zone scale** — the separable cool→warm `--zone-1..5` five-tone scale
   (status-tone saturation, distinct from the accent), superseding the
   periwinkle ramp, alongside the running-detail HR-zones widget's rebuild into
@@ -274,6 +329,34 @@ State things honestly so a `greenfield` DX knows where it has room.
   [`dx/run-detail-refresh.md`](dx/run-detail-refresh.md) (`session-recap-parity`).
 
 ## Changelog
+
+- **v0.4.4** (2026-07-30) — the outdoor map release. Three things, provenance
+  ([`sows/outdoor-hiking-maps.md`](sows/outdoor-hiking-maps.md)):
+  1. **New `--map-*` chrome family** (`bg` / `fg` / `route-casing`) for the one
+     surface that renders over a canvas whose luminance we don't control. The
+     neutral ramp cannot serve it: `--surface` is invisible over aerial imagery.
+     Additive; no existing token changes.
+  2. **One carve-out from the dark-theme Fixed Point**, for aerial imagery only
+     — a photograph has no theme. Scoped to the basemap pixels; everything we
+     draw over them stays on system tokens. Written into Fixed Points above with
+     the test it has to pass, so it reads as a decision rather than a
+     contradiction. A registry test enforces that every basemap declares itself
+     `dark` or `imagery`, so a light *cartographic* basemap can't slip in under
+     the same carve-out.
+  3. **The Activity tonal hue table corrected against `app/globals.css`** in all
+     five rows, and the **hike (clay) row added** — the registration
+     [`sows/hiking-activity-type.md`](sows/hiking-activity-type.md) planned for a
+     v0.4.4 that was never cut, which is why this release takes that number
+     rather than leaving a phantom one. The drift was real (the printed run hue
+     was a full step more saturated than the shipped one) and is exactly what
+     that SOW's Open Question 4 predicted. Its other half — `--discipline-lift-dot`
+     being `--accent` exactly, contradicting the "activity ≠ selection" rule — is
+     **documented in place and left open**, because resolving it is a design
+     decision rather than a transcription fix.
+
+  Also recorded: the route stroke is a **series**, so it takes the discipline
+  hue and not `--accent`; the switcher's active pill keeps the accent because it
+  is genuinely a selection control. No re-tone of the v0.4 foundation.
 
 - **v0.4.3** (2026-07-18) — added the **activity session-recap** grammar under
   Decided: the shared header-and-body composition for activity detail surfaces
