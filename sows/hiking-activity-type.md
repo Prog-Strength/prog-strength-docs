@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Hiking Activity Type
 
-**Status**: Draft · **Last updated**: 2026-07-29
+**Status**: Shipped · **Last updated**: 2026-07-30
 
 > First new activity type since the unified activity model landed, and
 > therefore the first real test of the recipe in
