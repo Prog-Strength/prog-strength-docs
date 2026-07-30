@@ -1,6 +1,6 @@
 # Prog Strength Design System
 
-**Status**: v0.4.3 · **Last updated**: 2026-07-18
+**Status**: v0.4.4 · **Last updated**: 2026-07-30
 
 > Seeded from the first design explorations (calendar, chat & app shell, timeline).
 > This is the **canonical record of decided visual conventions** — start small,
@@ -51,8 +51,8 @@ a light background.
 - **Macro tints**: protein `#34d399` (green), fat `#fbbf24` (amber), carb
   `#60a5fa` (blue), each on a ~13%-alpha background. For nutrition macro chips.
   **Unchanged** — they await nutrition's own migration SOW.
-- **Activity tonal hues**: per-discipline desaturated hues — **run** and **lift**
-  today, the system **extensible** to mobility/core later — toned to sit on the
+- **Activity tonal hues**: per-discipline desaturated hues — **run**, **lift**,
+  and **hike** today, the system **extensible** to mobility/core later — toned to sit on the
   dark near-black surface and **kept distinct from the periwinkle accent** (an
   activity must never read as selection / "today"). Each discipline has a
   three-token set — `bg` (tint fill), `fg` (text), `dot` (accent: left bar / pill
@@ -62,6 +62,7 @@ a light background.
   | --- | --- | --- | --- |
   | **run** (green-teal) | `#16302a` | `#82d3b8` | `#46b893` |
   | **lift** (steel-blue) | `#1a2a3c` | `#8cbce8` | `#5598d8` |
+  | **hike** (clay) | `#2a201c` | `#c9a690` | `#b08e77` |
   | mobility *(reserved)* | `#1f3330` | `#8fd6c4` | `#4fbfa3` |
   | core *(reserved)* | `#2c2440` | `#c2adf0` | `#9a7fe0` |
 
@@ -275,6 +276,15 @@ State things honestly so a `greenfield` DX knows where it has room.
 
 ## Changelog
 
+- **v0.4.4** (2026-07-30) — added the **hike** activity tonal hue (desaturated
+  clay: `--discipline-hike-bg` `#2a201c`, `--discipline-hike-fg` `#c9a690`,
+  `--discipline-hike-dot` `#b08e77`), the first new discipline hue since the v0.3
+  palette. Registered in `lib/activity-colors.ts` (the `hike` entry in
+  `ACTIVITY_COLORS`/`ACTIVITY_RING`) with matching `--discipline-hike-*` tokens in
+  `app/globals.css`; clay is earthy for terrain and kept warmer/browner than
+  `--danger` and clearly distinct from the periwinkle accent per the standing
+  "activity ≠ selection" rule. No re-tone of the v0.4 foundation. Provenance
+  [`sows/hiking-activity-type.md`](sows/hiking-activity-type.md).
 - **v0.4.3** (2026-07-18) — added the **activity session-recap** grammar under
   Decided: the shared header-and-body composition for activity detail surfaces
   (kicker → large title → notes-as-prose → quiet metric strip → discipline-hue
