@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Outdoor Hiking Maps
 
-**Status**: Draft · **Last updated**: 2026-07-30
+**Status**: Shipped · **Last updated**: 2026-07-30
 
 > Frontend work conforms to the design system
 > ([`design-system.md`](../design-system.md)). Two of its rules do real work
@@ -17,8 +17,9 @@ repos:
 > style is a deliberate, scoped exception), and the **"activity ≠ selection"**
 > rule under Activity session-recap (`--accent` is edit/focus chrome only,
 > never a series hue) — which today's route stroke violates. This SOW fixes
-> that rather than propagating it. One new token family is proposed
-> (`--map-*` chrome), justified in § Design System.
+> that rather than propagating it. One new token family was added
+> (`--map-*` chrome), justified in § Design System and recorded in
+> `design-system.md` v0.4.4.
 
 ## Introduction
 
@@ -658,7 +659,7 @@ idiom, not a `<select>`. The map card keeps `--radius-card`, `--border`, and
 **Extends:** map chrome cannot be expressed in the existing token set. Controls
 sit over provider-supplied canvases whose luminance we do not control — a pale
 topo, an aerial photograph — and `--surface` over imagery is invisible. One new
-token family, proposed for **v0.4.5**:
+token family, proposed for **v0.4.5** — shipped as **v0.4.4**, see § Resolution:
 
 | Token | Purpose |
 | --- | --- |
@@ -667,7 +668,7 @@ token family, proposed for **v0.4.5**:
 | `--map-route-casing` | The dark under-stroke; deliberately not `--background` (it must darken imagery, not match a panel) |
 
 Three tokens, one surface, an explicit amendment with provenance — not an
-open-coded hex in a component. `design-system.md` bumps to v0.4.5 with a
+open-coded hex in a component. `design-system.md` bumps to v0.4.4 with a
 changelog entry; the **Satellite dark-theme exception is written into that entry
 as a scoped carve-out**, so a future reader finds the reasoning rather than an
 apparent contradiction of a Fixed Point.
@@ -771,7 +772,7 @@ pull the request counter to parity with sessions as the binding limit.
 | **R4** | **Contour and label density is unreadable at phone width.** | `minzoom` gating in the re-tone pass, tuned on-device before merge (Open Question 4). |
 | **R5** | **Provider outage or key misconfiguration blanks the map.** | `resolve()` → `null` removes a style from the switcher; the map falls back to keyless OpenFreeMap with overlays intact. Degradation is to today's product. |
 | **R6** | **Style-switch churn inflates session count** — a user cycling styles may open several sessions. | Sessions are the binding meter; the quota check after real use exists to catch this. If it bites, persist-and-restore (already scoped) plus not remounting the map on switch keeps it to one session per visit. |
-| **R7** | **Satellite imagery contradicts the dark-theme Fixed Point.** | Written into the v0.4.5 changelog as an explicit scoped exception with reasoning; chrome and route stay on system tokens over imagery. |
+| **R7** | **Satellite imagery contradicts the dark-theme Fixed Point.** | Written into the v0.4.4 changelog as an explicit scoped exception with reasoning; chrome and route stay on system tokens over imagery. |
 | **R8** | **Scrub feedback loop** between map and profile causes a render storm. | Idempotent setter on equal values; neither direction re-emits on programmatic update; covered by test. |
 | **R9** | **Grade noise** makes the readout untrustworthy on a downsampled series. | ≥30 m smoothing window, server-owned so one number exists product-wide; NULL rather than a fabricated value at the boundaries. |
 | **R10** | **Esri's free imagery terms are account-scoped**, not anonymous — using the public endpoint without a developer account is out of terms. | Provision the ArcGIS developer account during Phase 3, not at merge; `esriImageryUrl` defaults to `null`, so Satellite is simply absent from the switcher until it is. |
@@ -787,19 +788,60 @@ a later one. **Dispatch one phase per run**, per the phase-sizing convention in
 | --- | --- | --- | --- |
 | **1 — Terrain foundation** | Style registry with Standard / Topo / Dark; dark re-tone of MapTiler Outdoor; Mapterhorn hillshade; `installOverlays` + `styledata` reinstall; route casing; discipline-hue stroke; endpoints and direction arrows; attribution control; `lib/config.ts` keys; the reinstall regression test. | web, docs | **2–3 days** · 1 dispatch |
 | **2 — Linked profile** | API: `latitude`, `longitude`, `grade_percent` on `trackpointDTO` + smoothed grade derivation + tests. Web: `RecapChart` scrub props; shared `scrubIndex` on `/hiking/[id]`; scrub marker; travelled/ahead route split; caption strip with grade, remaining climb, remaining distance; map→profile reverse binding; mileage markers. | api, web | **3–4 days** · 1 dispatch (API and web can be one run; the API PR must merge first) |
-| **3 — Imagery** | Esri developer account provisioned (owner, interactive); Satellite style; composed Satellite + Trails style; `canvas: "imagery"` stroke treatment; per-style attribution. | web, docs | **2–3 days** · 1 dispatch |
-| **4 — Polish** | Per-user style persistence; on-device contour/label tuning; `design-system.md` v0.4.5 with the `--map-*` tokens and the satellite carve-out; `sow-trail-map.md` OQ2 marked answered; quota check against projection. | web, docs | **1–2 days** · 1 dispatch |
+| **3 — Imagery** | ~~Esri developer account provisioned (owner, interactive)~~; Satellite style; ~~composed~~ Satellite + Trails style; `canvas: "imagery"` stroke treatment; per-style attribution. **See the correction below — neither the account nor the composition was needed.** | web | **half a day** · 1 dispatch |
+| **4 — Polish** | Per-user style persistence; on-device contour/label tuning; `design-system.md` **v0.4.4** with the `--map-*` tokens and the satellite carve-out; `sow-trail-map.md` OQ2 marked answered; quota check against projection. | web, docs | **1–2 days** · 1 dispatch |
 
 **Total: roughly 8–12 engineering days across 4 dispatches.** Phase 1 alone
 closes the gap the Introduction describes — the map stops being a street map —
 and is the phase to ship if only one ships.
 
-Phase 3 has an **interactive prerequisite the autonomous worker cannot satisfy**:
-the ArcGIS developer account and the MapTiler key/origin-restriction must be
-provisioned by the owner in a browser first, exactly as Phase 0 of the mobile
-parity SOW handles Apple credentials. Dispatching Phase 3 before that yields a
-Satellite entry that correctly resolves to `null` and never appears — working
-code, invisible feature.
+Phase 3 was written as having an **interactive prerequisite the autonomous
+worker cannot satisfy** — an ArcGIS developer account provisioned by the owner
+in a browser, exactly as Phase 0 of the mobile parity SOW handles Apple
+credentials. **That was wrong, and so was the plan it implied.** Correction
+below.
+
+### Correction: Phase 3 as built (2026-07-30)
+
+Two of this SOW's provider assumptions did not survive contact with the
+providers. Both were resolved by reading the live style documents before
+writing code, and both made the phase smaller. Recorded here because a future
+reader would otherwise inherit them.
+
+1. **No second provider, and no account to provision.** The SOW specified Esri
+   World Imagery behind a free ArcGIS developer account. But **MapTiler serves
+   imagery from the same key already configured for the topographic basemap** —
+   `satellite` and `hybrid` are first-party styles on the existing plan. The
+   named blocker did not exist. Esri remains a legitimate alternative and is
+   still a one-entry swap in the registry; it is simply not needed.
+
+2. **"Satellite + Trails" required no composition.** The SOW planned to fetch
+   the outdoor style JSON, replace its background and landcover layers with an
+   imagery raster, and retain its path/waterway/symbol layers — the one piece of
+   genuine style surgery in the whole document, and the reason Phase 3 was
+   budgeted at 2–3 days. Diffing the two live style documents shows MapTiler's
+   `hybrid` **is** `satellite` with its sixteen vector layers flipped from
+   `visibility: none` to visible, `Path` and `Path minor` among them:
+
+   ```
+   satellite  visible non-raster layers: 0
+   hybrid     visible non-raster layers: 16
+   ```
+
+   Two registry entries. Phase 3 shipped in roughly half a day.
+
+**The generalizable lesson**, and the third time it paid in this SOW: *probe the
+provider before designing around it.* Phase 1's dark re-tone transform was
+deleted the same way, by discovering `outdoor-v2-dark` exists. Every fragile
+piece this document planned — a runtime style re-tone, a runtime style
+composition, a second vendor account — turned out to be a provider feature
+already shipped. The cost of checking was three `curl`s.
+
+**What Phase 3 did keep** is the part that was genuinely ours: `canvas:
+"imagery"` moving from a declared-but-unused field to real route weights
+(casing 7→9, stroke 3→3.5, travelled 3.5→4.5, label halo 1.5→2.75), because
+aerial imagery is high-contrast photographic noise and a route tuned for a quiet
+dark canvas vanishes over scree or snowpack.
 
 ## Success Metrics
 
@@ -881,3 +923,59 @@ applications," which is not measurable as stated. These are:
    signal ever exists (a surface field, or an elevation-gain threshold), this
    becomes a one-line change in `DEFAULT_STYLE`. Until then the user's persisted
    choice covers it.
+
+## Resolution (2026-07-30)
+
+Shipped across four PRs, each its own dispatch-sized phase:
+
+| Phase | PR | What landed |
+| --- | --- | --- |
+| 1 — Terrain foundation | [web #126](https://github.com/Prog-Strength/prog-strength-web/pull/126) | Style registry, `outdoor-v2-dark`, Mapterhorn hillshade, `installOverlays` + `styledata` reinstall, casing, discipline-hue stroke, arrows, endpoints |
+| 2 — Linked profile | [api #87](https://github.com/Prog-Strength/prog-strength-api/pull/87) · [web #127](https://github.com/Prog-Strength/prog-strength-web/pull/127) | `latitude`/`longitude`/`grade_percent` on the trackpoint DTO; shared scrub index, travelled overlay, caption readout, mile marks, reverse binding |
+| 3 — Imagery | [web #128](https://github.com/Prog-Strength/prog-strength-web/pull/128) | `satellite` + `satellite-trails`, `canvas: "imagery"` weights (see the Phase 3 correction above) |
+| 4 — Polish | web + docs | Style persistence, `design-system.md` v0.4.4, this close-out |
+
+### How the Open Questions resolved
+
+1. **MapTiler plan timing** — **(a) as written.** Still on the free tier; the
+   trigger is first revenue, not traffic, and it belongs in the launch runbook.
+   Note that Phase 3's outcome *raises* the stakes slightly: imagery now runs on
+   the same key, so the upgrade covers one more surface than planned.
+2. **Route stroke off `--accent`** — **(a), done.** The stroke is the discipline
+   hue on both run and hike detail, matching the chart it is now linked to.
+   Recorded in `design-system.md` v0.4.4.
+3. **Where the style preference lives** — **(a) `localStorage`, done.** Global
+   rather than per-discipline: a user who picked Satellite chose it, and a
+   per-discipline preference would mean explaining why their choice "didn't
+   stick" on a run. Revisit if mobile grows a map.
+4. **Contour `minzoom` and hillshade exaggeration** — **partly answered, and
+   still the one thing genuinely open.** MapTiler's own minzooms turned out to
+   be sensible (contour lines z10/z11, labels z12, peak labels z9), so no gating
+   of our own was added. The hillshade exaggeration stops
+   (`6:0.45 → 12:0.38 → 16:0.25`) and the imagery route weights were judged
+   against a local harness rendering the real basemap and real paint at 390px
+   and 720px — **not** against a real hike on a real phone. See Still Open.
+5. **`design-system.md` hue-table drift** — **(a), done, and wider than
+   scoped.** All five rows were corrected against `app/globals.css`, not just
+   hike: the drift was in every row. The release took the number **v0.4.4**
+   rather than the v0.4.5 this SOW proposed, because the v0.4.4 that
+   `hiking-activity-type.md` planned was never cut and a phantom version is
+   worse than a renumbered one. The lift-dot/accent collision is documented in
+   place and **left open**, as scoped.
+6. **Topographic default for runs** — **(a), unchanged.** Runs still default to
+   Standard. With persistence shipped, a trail runner's own choice now carries
+   forward, which weakens the case for ever changing the default.
+
+### Still open
+
+- **On-device tuning (OQ4).** Contour density and hillshade strength were judged
+  on a desktop harness at simulated phone width. Warm terrain hues shift against
+  near-black neutrals, and a harness is not a phone in daylight. Worth one pass
+  on a real hike before this is considered finished.
+- **The quota check.** § Cost Analysis projects sessions as the binding meter
+  (~5,000/month free). Nobody has read the MapTiler console against real usage
+  yet, and a projection nobody checks is a guess. One look after a week of use.
+- **Non-goals stay non-goals.** Mobile, offline download, live navigation, POI
+  enrichment, public-land boundaries and weather overlays were all deliberately
+  excluded and none crept in. The overlay stack is a list of declared entries
+  specifically so each is an addition rather than a rewrite.

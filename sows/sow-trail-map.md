@@ -306,6 +306,17 @@ Non-Goals around recomputing on PATCH.
    DB stores them; map uses GeoJSON. *Tentative lean:* omit from DTO in this
    SOW to keep payloads stable for chart consumers; add later if pace↔map
    brushing needs it.
+
+   **ANSWERED — yes, 2026-07-30.** Exactly the trigger this question
+   anticipated arrived: linking the elevation profile to the route map needs a
+   per-sample coordinate, and the simplified `route` geometry cannot supply one
+   (it is RDP-reduced and deliberately not index-aligned with anything, whereas
+   the client's elevation strip is a straight map over `trackpoints[]`, so strip
+   index *i* is trackpoint *i*). `latitude`, `longitude` and `grade_percent` are
+   now on `trackpointDTO` — nullable, no `omitempty`, additive, and still absent
+   from list responses. See
+   [`outdoor-hiking-maps.md`](outdoor-hiking-maps.md) § API Surface
+   (prog-strength-api#87).
 3. **Supersession edit to `run-route-geometry-capture.md`.** *Tentative lean:*
    on approval of this SOW, set that draft's status to superseded with a pointer
    here (docs-only commit, can land with this file).
