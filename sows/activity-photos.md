@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-infra
@@ -10,7 +10,7 @@ repos:
 
 # Activity Photos
 
-**Status**: Draft · **Last updated**: 2026-07-30
+**Status**: Shipped · **Last updated**: 2026-07-31
 
 ## Introduction
 
