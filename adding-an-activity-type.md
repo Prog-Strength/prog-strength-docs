@@ -237,6 +237,22 @@ fails — it's the alarm, not just documentation.
   a newly registered type is loggable and listable through the agent with no
   MCP-side change.
 
+Two more come free on the **API** side but are **not** covered by
+`contract_test.go` — they're gated on the row's *data* rather than dispatched
+through the registry, so nothing fails if they regress. Verify them yourself:
+
+- **Heart-rate zones on the detail read.** `attachHeartRateZones`
+  (`internal/activity/unified_handler.go`) emits the `heart_rate_zones` block
+  for any activity whose trackpoints carry per-point HR, with no
+  `activity_type` switch — time in zone is a property of the heart-rate
+  stream, not of the sport. A type that ingests HR gets the block the day it
+  registers. The reference max HR stays running-derived on purpose (see
+  `RecentHRStats`), so a type with no running history reads as
+  `calibrating` rather than wrong.
+- **Photos on the detail read.** `attachPhotos` is likewise unconditional, so
+  `GET /activities/{id}` returns a `photos` array for your type with no
+  change. Note this covers the **read** only — see the upload caveat below.
+
 ## What does NOT come free
 
 Be honest with yourself about this list before promising a type is "done."
@@ -274,6 +290,30 @@ Be honest with yourself about this list before promising a type is "done."
   test proves. A bespoke visual treatment (a distinct icon, a type-specific
   detail page, a custom color per the design system's "activity tonal hues")
   is per-type frontend work, same as it's always been.
+
+- **Photo *uploads* — add your type to `ActivityType.Valid()` or they 500.**
+  This is the one place a registry-driven type still meets a hand-maintained
+  switch. `buildPhotoKey` (`internal/activity/photo_key.go`) puts
+  `activity_type=` in the S3 Hive prefix and rejects anything
+  `ActivityType.Valid()` (`internal/activity/activity_type.go`) doesn't list,
+  and `uploadPhoto` maps that error to `httpresp.ServerError` — so
+  `POST /activities/{id}/photos` returns **500**, not a 4xx, for a type you
+  registered but didn't add to that switch. Reads still work, which makes it
+  easy to miss. `contract_test.go` does not cover the photo endpoints, so
+  nothing warns you. Add the constant to `Valid()` in the same change that
+  registers the descriptor.
+
+- **The photo strip and the heart-rate-zones widget on the client.** Both
+  live in `prog-strength-web`'s shared `components/activity-detail/`
+  (`PhotoStrip`, `HeartRateZones`) and both are **opt-in per detail route** —
+  a page that doesn't render them silently shows nothing, even with the API
+  returning the data. This has already bitten twice: the zones widget was
+  page-private to the run detail until
+  [`prog-strength-web#133`](https://github.com/Prog-Strength/prog-strength-web/pull/133),
+  and the photo strip shipped on the workout detail only until
+  [`prog-strength-web#135`](https://github.com/Prog-Strength/prog-strength-web/pull/135).
+  When your type gets a detail page, render both — the data is already on the
+  response. Mobile is a separate opt-in with the same shape.
 
 ## Worked example: shadowboxing
 
