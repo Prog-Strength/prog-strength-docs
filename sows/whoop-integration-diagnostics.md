@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-tooling
@@ -9,7 +9,7 @@ repos:
 
 # WHOOP Integration Diagnostics, Resync & Liveness Alerting
 
-**Status**: Draft · **Last updated**: 2026-07-31
+**Status**: Shipped · **Last updated**: 2026-07-31
 
 ## Introduction
 
