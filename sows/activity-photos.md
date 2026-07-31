@@ -249,6 +249,7 @@ Both surfaces conform to [`design-system.md`](../design-system.md) and introduce
 **Web** (`prog-strength-web`):
 
 - `components/activity-detail/PhotoStrip.tsx` — a horizontal strip of 14px-radius thumbnails beneath the session header, each in an aspect-ratio box derived from `width`/`height`. For the owner, an **Add photo** affordance and an edit mode exposing per-photo delete, caption editing, and move-left / move-right buttons. Reordering issues one `PUT …/order` with the full list.
+- **The strip renders on every activity detail route, not one of them.** Photos hang off the `activities` base row, so "the activity detail page" here means each of `/workouts/{id}`, `/running/{id}`, and `/hiking/{id}` — and whatever route a future type adds. The component is shared, but it is opt-in per page: a route that doesn't render `PhotoStrip` silently has no way to attach a photo, which is exactly the state the first implementation shipped in (strength only) and [`prog-strength-web#135`](https://github.com/Prog-Strength/prog-strength-web/pull/135) corrected. Enumerate the routes when checking this off.
 - A minimal lightbox: tap opens the `full` variant in a modal with previous/next navigation, keyboard arrows and Escape, the caption beneath, and focus trapped in the dialog.
 - Timeline card gains a single cover thumbnail with a `+N` badge when `photo_count > 1`, inside an aspect-ratio box so the feed does not reflow as images load. Tapping the card goes to the activity detail page and its full strip — the feed itself gets no carousel.
 
