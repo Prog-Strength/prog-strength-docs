@@ -1,6 +1,6 @@
 # Adding an Activity Type
 
-**Status**: Living reference · **Last updated**: 2026-07-27
+**Status**: Living reference · **Last updated**: 2026-07-30
 
 > This is the recipe [`sows/unified-activity-model.md`](sows/unified-activity-model.md)
 > promised: after that SOW, adding a training type is supposed to be a
@@ -215,6 +215,15 @@ fails — it's the alarm, not just documentation.
   calls to build post cards, and what the unified list calls to build list
   rows. One card renderer, two callers.
   (`TestContract_BaseOnlyType_RendersTimelineCard`)
+- **Timeline post publishing** — logging a session of your type creates a
+  `timeline_post` row, so it appears in the social feed. Since migration
+  `046_timeline_all_activity_types.sql` the feed's `source_type` names the
+  source *domain* (`activity` / `pr` / `best_effort`), not the sport: every
+  session type publishes under the one `activity` value and the sport is read
+  back from `activities.activity_type`. Feed posts carry it as the
+  `activity_type` field beside `source_type`, which is what web and mobile
+  switch their per-sport rendering on.
+  (`TestContract_BaseOnlyType_PostsToTimeline`)
 - **Training snapshot active-days**: `internal/snapshot/aggregate.go`'s
   `sessionDates` counts a day with *any* logged session as active, no
   per-type switch. (`TestContract_BaseOnlyType_CountsAsSnapshotActiveDay`)
@@ -232,23 +241,13 @@ fails — it's the alarm, not just documentation.
 
 Be honest with yourself about this list before promising a type is "done."
 
-- **Timeline post *publishing* — as opposed to card *rendering*.**
-  `timeline_post.source_type` carries a SQL `CHECK` in
-  `internal/db/migrations/020_timeline.sql`:
-  `CHECK(source_type IN ('workout', 'run', 'pr', 'best_effort'))`. Your
-  descriptor's `Summarize` makes a card render *if* a post exists, but
-  nothing about registering a descriptor creates a `timeline_post` row for
-  your type. Publishing feed posts for a new type additionally needs:
-  1. A migration widening that `CHECK` to include your `source_type`.
-  2. A mapping from your `ActivityType` to a `timeline.SourceType`
-     (`internal/timeline/source_type.go`) wherever posts get created for your
-     type (a publish hook analogous to the workout/run ones).
-  3. A `sessionHref` entry in `internal/server/timeline_hydrator.go` so a
-     published post knows what web URL to link to.
-
-  Card rendering and post publishing are different concerns with different
-  costs — don't conflate "the contract test's card renders" with "this type
-  posts to the feed."
+- **A dedicated Activities tab, and the feed link that points at it.**
+  Publishing is free, but `activityHref` in
+  `internal/server/timeline_hydrator.go` maps a sport to the web view that
+  lists it (`?view=workouts`, `?view=running`, `?view=hiking`). An unmapped
+  type deep-links to the `/activities` overview — a working link, not a 404 —
+  so this is a *nice-to-have*, not a blocker. Add an entry only once your
+  type has a tab of its own on web.
 
 - **Type-specific analytics.** Tiles, dedicated metrics endpoints, PR-like
   surfaces (best-effort tracking, 1RM history, headline exercises) are
