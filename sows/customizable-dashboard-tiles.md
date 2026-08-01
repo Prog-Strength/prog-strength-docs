@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Customizable Dashboard Tiles
 
-**Status**: Draft · **Last updated**: 2026-07-31
+**Status**: Shipped · **Last updated**: 2026-07-31
 
 > Frontend-led SOW with a supporting API change. `scope: in-system` — it conforms
 > to design-system **v0.4** (dark near-black, periwinkle `#9aa6d6`, Manrope, 14px
