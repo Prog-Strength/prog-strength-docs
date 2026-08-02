@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Recovery Tile Family — Five Dashboard Tiles from `dx/recovery-tile`
 
-**Status**: Ready for implementation · **Last updated**: 2026-08-01
+**Status**: Shipped · **Last updated**: 2026-08-02
 
 > Frontend SOW with a small API companion. It implements the chosen DX variants and
 > therefore inherits that DX's `scope` — here **`in-system`**. The visual foundation
