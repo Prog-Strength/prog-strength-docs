@@ -1,6 +1,12 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idioms:
+  - balance-band
+  - readiness-verdict
+  - three-dial-vitals
+  - trend-rail
+  - morning-ledger
 surface: recovery-tile
 idioms:
   - balance-band
@@ -23,7 +29,14 @@ repos:
 
 # DX: Recovery Tile
 
-**Status**: Draft · **Last updated**: 2026-08-01
+**Status**: Selected (all five idioms) · **Last updated**: 2026-08-02
+
+> **Selected:** all five idioms — `readiness-verdict`, `balance-band`,
+> `three-dial-vitals`, `trend-rail`, `morning-ledger` (DX comparison PR
+> Prog-Strength/prog-strength-web#143, closed un-merged). The
+> no-two-variants-hero-the-same-figure constraint held on the spread, so all
+> five ship as separate, independently addable catalog tiles. Built for real by
+> [`sows/recovery-tile-family.md`](../sows/recovery-tile-family.md).
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
