@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: recovery-tile
 idioms:
   - balance-band
@@ -23,7 +23,7 @@ repos:
 
 # DX: Recovery Tile
 
-**Status**: Draft · **Last updated**: 2026-08-01
+**Status**: Awaiting selection · **Last updated**: 2026-08-02
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
