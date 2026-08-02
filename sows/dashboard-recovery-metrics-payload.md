@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Dashboard Recovery Metrics Payload
 
-**Status**: Draft · **Last updated**: 2026-08-01
+**Status**: Shipped · **Last updated**: 2026-08-02
 
 ## Introduction
 
