@@ -1,5 +1,5 @@
 ---
-status: draft
+status: ready_for_implementation
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Photo Upload Off the Request Path
 
-**Status**: Draft · **Last updated**: 2026-08-02
+**Status**: Ready for implementation · **Last updated**: 2026-08-02
 
 ## Introduction
 
@@ -48,7 +48,7 @@ Three changes, and the third was not obvious until the pipeline was actually mea
 
 1. Photos adopt the two-phase presigned upload videos already use — `reserve` → direct browser PUT to S3 → `commit`.
 2. The remaining server-side work moves off the request path into an asynchronous worker.
-3. **The full-resolution re-encode is deleted.** The stored photo becomes the user's original bytes with their metadata rewritten in place — losslessly — rather than a re-compressed copy.
+3. **The full-resolution re-encode is deleted for JPEG.** The stored photo becomes the user's original bytes with their metadata rewritten in place — losslessly — rather than a re-compressed copy. PNG and WebP keep the existing path in v1; see [Scope: JPEG first](#scope-jpeg-first).
 
 ### Why direct-to-S3 alone does not fix this
 
@@ -106,7 +106,9 @@ There is a second, quieter loss. Go's `image/jpeg` encoder emits only `DQT`, `SO
 
 ### Strip the metadata losslessly instead
 
-None of the privacy requirement needs a re-encode. A JPEG is a sequence of marker segments, and EXIF lives in `APP1`. The file can be rewritten keeping only what should survive and dropping the rest, **without touching the entropy-coded scan data at all** — pure Go, no cgo, which matters given the `sqlite-vec`/musl history. PNG (`eXIf`) and WebP (`EXIF`) carry the same metadata in their own chunk structures and take the same treatment.
+None of the privacy requirement needs a re-encode. A JPEG is a sequence of marker segments, and EXIF lives in `APP1`. The file can be rewritten keeping only what should survive and dropping the rest, **without touching the entropy-coded scan data at all** — pure Go, no cgo, which matters given the `sqlite-vec`/musl history.
+
+**v1 strips JPEG only.** PNG and WebP carry the same metadata in their own chunk structures and could take the same treatment, but they keep going through the existing re-encode path until the JPEG rewriter has run in production. The reasoning is in [Scope: JPEG first](#scope-jpeg-first) — it is a deliberate risk decision, not an oversight.
 
 The rule is a **whitelist, not a blocklist**, because location does not only live in EXIF GPS tags — XMP (`APP1`, different namespace) and IPTC (`APP13`) can both carry coordinates, and MakerNotes carry camera serial numbers. Rebuild with only:
 
@@ -124,6 +126,31 @@ What remains server-side is a decode and a thumbnail — the decode is unavoidab
 | full-size fidelity | generation loss, no ICC | the original bytes, ICC intact |
 
 Cheaper, smaller, and higher fidelity at once — the rare case where the ambitious answer and the simple one agree, which is the same note the video SOW struck for a different reason.
+
+### Scope: JPEG first
+
+**Decision: v1 strips JPEG only. PNG and WebP continue through `processPhoto` unchanged.**
+
+This was carried as an open question through two drafts and is now settled, because it is the one call an implementer should not have to make by inference.
+
+The strip is the only genuinely risky thing in this SOW. Everywhere else, a bug produces a broken request or a missing thumbnail. Here, a bug produces an *unreadable file* — and under this design there is no second copy to fall back on, because the whole point is that the stored object is the original. That asymmetry justifies narrowing the blast radius rather than shipping three container parsers at once.
+
+JPEG is where the entire win lives:
+
+- It is what every phone camera produces, so it is essentially all real activity photos.
+- It is the only one of the three whose re-encode is *generation loss* — PNG is lossless at source, so re-encoding it to JPEG is a quality change but not a copy-of-a-copy.
+- It is where the ICC/Display P3 bug actually bites, because wide-gamut capture is a camera behaviour.
+
+PNG and WebP are, in this product, screenshots and saved images: smaller, less fidelity-critical, and already served acceptably by the path that exists today. Keeping them on `processPhoto` costs nothing to build — that code stays exactly as it is — and buys a v1 with one new parser instead of three.
+
+**The strip is also not allowed to be fatal.** After rewriting, the worker re-reads its own output and verifies it (decodes, dimensions match, no disallowed segment survives). If that verification fails, it does **not** fail the photo — it falls back to `processPhoto` on the staged original, stores the re-encoded copy, and records the fallback. The user gets their photo at today's quality rather than an error; the operator gets a signal that the rewriter has a case it cannot handle.
+
+That fallback is what makes the risk acceptable, so it is a requirement rather than a nicety:
+
+- The fallback path emits a **counter metric**, not just a log line. A rewriter quietly failing on every photo and silently degrading to re-encode would otherwise look exactly like success.
+- A non-zero fallback count is the signal to fix the rewriter before extending it to PNG/WebP.
+
+Extending to PNG and WebP is a follow-on, gated on that counter sitting at zero across real traffic. See [Open Questions](#open-questions).
 
 ### What this buys
 
@@ -148,8 +175,9 @@ Cheaper, smaller, and higher fidelity at once — the rare case where the ambiti
 - **Photo bytes never transit the API host.** The client PUTs directly to the activity-photo bucket through a presigned URL.
 - **The remaining image work runs off the request path**, so no photo operation is bounded by the API's global 10s timeouts.
 - **The server stays authoritative on metadata stripping.** No object is reachable through a presigned GET until the server has rewritten its metadata. The guarantee never rests on client cooperation.
-- **The stored full-size photo is the user's original bytes**, metadata-rewritten but never re-compressed — strictly higher fidelity than today, and ~40% less storage.
-- **ICC colour profiles survive**, fixing a silent colour shift the current re-encode introduces on every wide-gamut photo.
+- **The stored full-size JPEG is the user's original bytes**, metadata-rewritten but never re-compressed — strictly higher fidelity than today, and ~40% less storage. PNG/WebP keep today's behaviour; see [Scope: JPEG first](#scope-jpeg-first).
+- **ICC colour profiles survive** on that path, fixing a silent colour shift the current re-encode introduces on every wide-gamut photo.
+- **A failed strip degrades, it does not error.** Verification failure falls back to `processPhoto` and increments a counter, so the worst case is today's quality plus an operator signal — never a lost photo.
 - **A `pending` state that the UI renders honestly** — the photo appears in the strip immediately with a processing affordance, rather than vanishing until the worker finishes.
 - **Abandoned reservations are reaped**, so a cancelled or failed upload leaves neither a permanent pending row nor an orphan object.
 - **The synchronous endpoint keeps working through the transition**, so `api` and `web` can ship in either order.
@@ -158,9 +186,10 @@ Cheaper, smaller, and higher fidelity at once — the rare case where the ambiti
 
 ### Non-Goals
 
-- **Re-encoding the full-size photo at all.** This SOW deletes that step rather than making it affordable. `full_max_edge_px` and `full_jpeg_quality` stop applying to the stored photo; see [Configuration](#configuration) for what becomes of them. This *serves* the goal of [`prog-strength-api#94`](https://github.com/Prog-Strength/prog-strength-api/pull/94) — the highest-fidelity copy the user will ever have — more completely than #94 itself could.
+- **Re-encoding the full-size JPEG.** This SOW deletes that step for JPEG rather than making it affordable. It stays for PNG/WebP and as the JPEG fallback, so `full_max_edge_px` and `full_jpeg_quality` stay too; see [Configuration](#configuration). This *serves* the goal of [`prog-strength-api#94`](https://github.com/Prog-Strength/prog-strength-api/pull/94) — the highest-fidelity copy the user will ever have — more completely than #94 itself could.
 - **Client-side metadata stripping as the privacy mechanism.** A browser canvas re-encode does drop EXIF, but a presigned PUT accepts whatever the client sends — so the guarantee would rest on client cooperation. Videos accepted that and paid for it by staying out of the timeline. Photos are *in* the timeline; the server must remain authoritative.
 - **Lossless rotation of pixels.** Keeping the `Orientation` tag is simpler, is what browsers already honour, and avoids the MCU-boundary edge cases a `jpegtran`-style transform has on dimensions that are not multiples of the block size.
+- **Stripping PNG or WebP in v1.** Decided in [Scope: JPEG first](#scope-jpeg-first), revisited once the fallback counter has sat at zero on real traffic.
 - **Re-processing existing photos.** Everything already stored was written by the old pipeline and stays as it is; its originals are gone and cannot be recovered. See [Backfill](#backfill).
 - **Raising the global `ReadTimeout`/`WriteTimeout`.** Weakening every route's slow-loris protection to accommodate one upload path is the wrong trade.
 - **Mobile.** `prog-strength-mobile` uses only the avatar endpoint (`lib/api.ts:1543`); it has no activity-photo upload, which is why it is absent from `repos:`.
@@ -220,15 +249,19 @@ A single goroutine started alongside the existing background workers in `interna
 1. Claim one `processing` row whose `attempts` is under the cap, oldest first, via a conditional `UPDATE ... RETURNING` so a future second worker cannot double-claim.
 2. `GET` the staged object from S3 into memory. This is the one place a whole image is still buffered — but on a worker with no request deadline and a concurrency of one, not on an inbound request path contending with five other services.
 3. **Validate.** The presigned PUT accepts whatever the client sent, so everything `uploadPhoto` does today still has to happen here: sniff with `http.DetectContentType` against the allowlist, and run `boundDimensions` off `DecodeConfig` (4 µs) before any pixel is decoded. This is the decompression-bomb guard and it does not move.
-4. **Strip.** Rewrite the container keeping only `APP2`/ICC and EXIF `Orientation`; drop GPS, XMP, IPTC, MakerNote, timestamps, comments. Entropy-coded scan data is copied through untouched.
-5. **Thumbnail.** Decode once, CatmullRom to `thumb_max_edge_px`, encode at `thumb_jpeg_quality`. Unchanged from today, and now the only re-encode in the system.
-6. `PUT` the stripped photo under the serving key and the thumb under the thumb key (`buildPhotoKey`, unchanged).
+4. **Produce the full-size object**, branching on the sniffed format:
+   - **JPEG** — rewrite the container keeping only `APP2`/ICC and EXIF `Orientation`; drop GPS, XMP, IPTC, MakerNote, timestamps, comments. Entropy-coded scan data is copied through untouched. Then **verify** (below).
+   - **PNG / WebP** — `processPhoto` exactly as today, with `full_max_edge_px` / `full_jpeg_quality` unchanged. No new code on this branch.
+5. **Thumbnail.** Decode once, CatmullRom to `thumb_max_edge_px`, encode at `thumb_jpeg_quality`. Unchanged from today.
+6. `PUT` the full-size object under the serving key and the thumb under the thumb key (`buildPhotoKey`, unchanged).
 7. Update the row: `s3_key`, `thumb_s3_key`, `byte_size`, `width`, `height`, `status = 'ready'`.
 8. **`DELETE` the staged object** — not a lifecycle tag. It is the only copy carrying GPS and it should stop existing as soon as it is redundant, not in three days when the rule next runs.
 
-A validation or strip failure is terminal — the bytes are not a usable image of an allowed type — so it goes straight to `failed` without retrying. Transient failures (S3, disk) increment `attempts` and retry with backoff, up to the cap, then `failed` with `last_error` recorded.
+**Verify before writing, and fall back rather than fail.** The rewritten bytes are re-read and checked — they decode, the dimensions match the source, and no disallowed segment survives — *before* the `PUT` in step 6. If that check fails, the worker does not fail the photo: it runs `processPhoto` on the staged original instead, stores that, and increments a **fallback counter metric** alongside a log line naming the photo id. The user gets their photo at today's quality; the operator gets the signal that the rewriter met a case it cannot handle.
 
-The strip must be **verified, not assumed**: re-read the rewritten bytes and confirm they still decode, and that no disallowed segment survives, before the `PUT` in step 6. A metadata rewrite that silently corrupts the scan data would destroy the only copy of the photo, and unlike a re-encode there is no second chance.
+This is the mitigation that makes the strip's risk acceptable, so the counter is a requirement, not an afterthought — a rewriter silently degrading every photo to re-encode would otherwise be indistinguishable from success. A non-zero count blocks extending the strip to PNG/WebP.
+
+A validation failure is terminal — the bytes are not a usable image of an allowed type — so it goes straight to `failed` without retrying. A *strip* failure is not terminal; it degrades as above. Transient failures (S3, disk) increment `attempts` and retry with backoff, up to the cap, then `failed` with `last_error` recorded.
 
 A **reaper** on a slower tick retires rows left `pending` past the presign TTL (the upload never happened) and tags any object under their reserved key. `activity_video` needs exactly this and should share the implementation rather than grow a second copy.
 
@@ -280,7 +313,9 @@ process_tick_seconds   = 2    # worker poll interval
 reap_after_minutes     = 30   # retire pending rows older than this
 ```
 
-**`full_max_edge_px` and `full_jpeg_quality` are deleted**, along with the block comment justifying them. Nothing re-encodes the full-size photo any more, so a knob controlling how it is re-encoded is worse than useless — it would read as live policy. `thumb_max_edge_px` and `thumb_jpeg_quality` stay and are now the only image-quality knobs in the system.
+**`full_max_edge_px` and `full_jpeg_quality` stay**, but their block comment must be rewritten, because what they govern narrows sharply. They no longer describe how the archival copy is made — for JPEG there is no longer a re-encode to configure. They now apply to exactly two paths: PNG/WebP sources, and the JPEG fallback when verification fails. The current comment presents them as the fidelity policy for every stored photo; after this they are the fidelity policy for the minority that still gets re-encoded, and the comment should say which is which or it will be read as live policy for a path that no longer exists.
+
+A knob deliberately **not** added: nothing lets an operator disable the strip and force the re-encode globally. The fallback already provides that behaviour per-photo and automatically, and a global switch would be a way to quietly turn off the feature and forget — the fallback counter is the honest version of the same control.
 
 `max_upload_bytes = 33554432` is unchanged in value but changes in both meaning and enforcement. Enforcement moves to the presign's `content-length-range` plus `commit`'s HEAD re-check. Its *rationale* changes more: the current comment reasons about `ParseMultipartForm` buffering on a shared 4 GB host, which stops being true, and it also claims the ceiling "covers any phone/camera JPEG or **HEIC**" — which is wrong today for an unrelated reason (Go's sniffer has no HEIC branch, so HEIC uploads 415 before size is ever consulted). Both halves of that comment must be rewritten rather than left to mislead; the HEIC gap itself is tracked separately.
 
@@ -288,11 +323,13 @@ reap_after_minutes     = 30   # retire pending rows older than this
 
 The metadata rewrite is the part that carries real risk — it is the only step that can destroy the sole copy of a photo, and the only step whose failure is a privacy incident rather than a broken image. It gets the most coverage:
 
-- **Strip, privacy:** a fixture JPEG carrying GPS, XMP, IPTC, MakerNote and a comment yields output where **none** of those segments survive. Asserted by walking markers, not by trusting the writer. Table-driven over JPEG, PNG (`eXIf`) and WebP (`EXIF`).
+- **Strip, privacy:** a fixture JPEG carrying GPS, XMP, IPTC, MakerNote and a comment yields output where **none** of those segments survive. Asserted by walking markers, not by trusting the writer.
 - **Strip, preservation:** `APP2`/ICC survives byte-identically; EXIF `Orientation` survives with its value intact; **the entropy-coded scan data is byte-identical to the source**. That last assertion is what makes "lossless" a fact rather than a claim.
 - **Strip, round-trip:** the rewritten bytes still decode, and to the same dimensions.
 - **Strip, adversarial:** truncated files, a JPEG with no `APP1` at all, a file with two `APP1` segments, EXIF with a bogus segment length, and a file whose declared length would run past `EOF` — none panic; all either produce valid output or fail terminally.
 - **Colour regression:** a source with a Display P3 profile keeps it. This is the bug the current pipeline has; a test that fails against `processPhoto` and passes against the new path is the proof it is fixed.
+- **Fallback:** a JPEG whose rewrite fails verification is stored re-encoded rather than failed, the row reaches `ready`, and the fallback counter increments. Driven by injecting a rewriter that returns deliberately corrupt output — the behaviour under a real bug is the thing being tested, so it cannot rely on finding a real bug.
+- **Format routing:** a PNG and a WebP both take the `processPhoto` branch untouched and are byte-comparable to what the current pipeline produces for the same input. This is the regression guard on the decision to leave them alone.
 - Unit: `reserve` rejects bad content types, oversize declarations, and a full activity; `commit` rejects a missing object (`409 upload_incomplete`), an oversize real object (`413`, with cleanup and reservation retirement), and a non-pending row (`409`).
 - Worker: success writes both objects, flips to `ready`, and **deletes the staged object**; a validation failure goes terminal without retry; a transient S3 failure increments `attempts` and retries; the cap sends it to `failed` with `last_error` set.
 - Worker, privacy: after a successful run the staged key is gone — asserted directly, since this is the whole reason the staging prefix exists.
@@ -328,5 +365,7 @@ Step 1 is the reason this SOW does not need to be rushed. Step 5 is the reason i
 - **One worker or a claim-based pool?** Single-user, and the pipeline is CPU-bound on two burstable vCPUs — a pool would contend with the API rather than add throughput. The claim query is written to be safe for more than one worker so this can change without a migration, but v1 runs exactly one.
 - **Is `processing` worth showing at all?** The alternative is optimistic rendering: display the client's local `ObjectURL` in the strip until the server's version is ready. Better-feeling, and meaningfully more state to get wrong — the local blob has to survive a navigation, and it lies about what is actually stored. Recommend the honest placeholder for v1.
 - **~~Should the original be retained rather than reaped?~~** *Resolved by the design above.* The question assumed the stored `full` was a derivative and the original was a second, optional copy costing double the storage. Once the re-encode is deleted, the stored photo **is** the original, and the only extra copy is the GPS-bearing staged upload — which should be deleted as fast as possible rather than retained. The trade-off dissolved: higher fidelity and ~40% *less* storage, not more.
-- **Is a lossless strip the right pure-Go bet?** It replaces a well-understood stdlib re-encode with a hand-rolled container rewrite across three formats, and the failure mode is worse — a re-encode that goes wrong produces a bad image, a rewrite that goes wrong produces an unreadable one, and there is no second copy. The mitigations are the verify-before-`PUT` step and the adversarial tests above. The alternative that avoids all of it is keeping the re-encode purely as insurance, at 304 ms, 28% size inflation, generation loss, and the ICC bug. Recommend the strip, but this is the one decision here worth a second opinion before implementation starts.
+- **~~Is a lossless strip the right pure-Go bet?~~** *Resolved — see [Scope: JPEG first](#scope-jpeg-first).* v1 strips JPEG only, PNG/WebP keep the existing re-encode, and a verification failure degrades to `processPhoto` rather than failing the photo. One new parser instead of three, on the format carrying the entire win, with an automatic fallback and a counter that says when it fires.
+- **When does the strip extend to PNG and WebP?** Gated on the fallback counter sitting at zero across real traffic, not on a date. Neither format is urgent: PNG is lossless at source so its re-encode is not generation loss, and neither is where the ICC bug bites. Worth revisiting once the JPEG rewriter has handled a few hundred real photos.
+- **Should the fallback counter alert, or just exist?** It is a counter either way. Whether a non-zero value should page depends on how loud the existing Grafana surface is; at single-user scale a dashboard panel is probably enough, and an alert on sustained non-zero is the cheap upgrade if it turns out to fire.
 - **What surfaces a `failed` photo to the user?** Nothing does, in this design — it is excluded from reads and visible only in logs and the row. At single-user scale that is arguably fine and arguably a silent data-loss path, which is the exact class of problem that produced this SOW. An alert on `failed` count is cheap and worth considering before this ships.
