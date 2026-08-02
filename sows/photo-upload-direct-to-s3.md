@@ -40,11 +40,15 @@ The [Activity Videos](activity-videos.md) SOW moved video bytes off this host an
 
 After this ships: the user picks a photo of any size the product allows, watches a real progress bar, and the photo appears — with no ten-second cliff, and no request that can die without saying why.
 
+And it appears at better quality than it does today. Investigating the timeout meant measuring the pipeline stage by stage, which turned up something the timeout had been hiding: the most expensive stage is also the one that damages the photo. That finding reshaped the design, and the case for it is in [The re-encode buys nothing](#the-re-encode-buys-nothing-and-costs-fidelity).
+
 ## Proposed Solution
 
-Photos adopt the two-phase presigned upload that videos already use — `reserve` → direct browser PUT to S3 → `commit` — **and** move the image pipeline off the request path into an asynchronous worker.
+Three changes, and the third was not obvious until the pipeline was actually measured:
 
-The second half is the load-bearing part, and it is what makes this more than a copy of the video design.
+1. Photos adopt the two-phase presigned upload videos already use — `reserve` → direct browser PUT to S3 → `commit`.
+2. The remaining server-side work moves off the request path into an asynchronous worker.
+3. **The full-resolution re-encode is deleted.** The stored photo becomes the user's original bytes with their metadata rewritten in place — losslessly — rather than a re-compressed copy.
 
 ### Why direct-to-S3 alone does not fix this
 
@@ -66,18 +70,60 @@ browser --6 MB--> Caddy --6 MB--> API   (whole file buffered in RAM)
 
 Two-phase upload collapses the first trip. The 6 MB goes browser→S3 once, as a plain PUT that is **not an API request at all** — no Go handler, no `WriteTimeout`, no 2 GB host buffering the file. The API handles two small JSON round-trips instead. That is a genuine and large win: it is the difference between the slowest part of the operation being subject to a ten-second ceiling and it not being subject to one.
 
-But **photos are not videos**, and the difference is the thing that breaks a naive port. Video is stored byte-for-byte — the video SOW's central decision, and the reason nothing has to happen server-side after the object lands. A photo *must* be re-encoded: dropping the source's EXIF/GPS is the privacy mechanism, it is documented as unconditional (`photo_pipeline.go`), and photos — unlike videos — are published to the social timeline, so that guarantee is load-bearing rather than defensive.
+But **photos are not videos**, and the difference is the thing that breaks a naive port. Video is stored byte-for-byte — the video SOW's central decision, and the reason nothing has to happen server-side after the object lands. A photo cannot be: the object served from the bucket must have its GPS removed first, that guarantee is documented as unconditional (`photo_pipeline.go`), and photos — unlike videos — are published to the social timeline, so it is load-bearing rather than defensive. A presigned GET serves S3 directly with no server in the path, so there is no serve-time hook. Whatever sits under the serving key must *already* be clean.
 
-So if `commit` runs `processPhoto` synchronously, the ten-second budget is not removed. It is *reloaded, with a download added to it*:
+So something must still run server-side after the upload lands, and if `commit` runs it synchronously the ten-second budget is not removed. It is *reloaded, with a download added to it*:
 
 ```
-commit --> GET 6 MB from S3 --> decode + re-encode --> PUT 10 MB to S3 --> 200
-           \___________________ still inside the same 10s deadline ___________________/
+commit --> GET 6 MB from S3 --> rewrite --> PUT to S3 --> 200
+           \_________ still inside the same 10s deadline _________/
 ```
 
-That is strictly worse than today for the processing half, because the host now has to fetch the bytes back that it previously received for free. Direct-to-S3 with a synchronous commit trades a client-upload timeout for a server-processing timeout and calls it progress.
+Direct-to-S3 with a synchronous commit trades a client-upload timeout for a server-processing timeout and calls it progress.
 
-The fix has to be both: **the bytes bypass the host, and the work leaves the request.** `commit` records that the object landed and returns immediately; a background worker does the pipeline and flips the row to ready.
+The fix has to be both: **the bytes bypass the host, and the work leaves the request.** `commit` records that the object landed and returns immediately; a background worker does the rest and flips the row to ready.
+
+### The re-encode buys nothing, and costs fidelity
+
+The above says work must happen after upload. It does not say that work is `processPhoto` as it stands. Measuring each stage on a 12 MP source with production config — the shape of a 6 MB phone photo — makes the case for cutting most of it:
+
+```
+source JPEG            = 7.80 MB
+DecodeConfig (bounds)  = 4µs        4032x3024
+jpeg.Decode            = 250ms
+applyOrientation(6)    = 80ms
+full variant  q95      = 304ms      10.02 MB   (128% of source)
+thumb 800/q85          = 205ms      70 KB
+```
+
+**The full variant costs 304 ms of CPU and comes out 28% larger than the file it was made from — and it is a worse image.** Re-encoding an already-lossy JPEG is generation loss; it cannot recover detail, only discard more. `config.toml` currently reasons about this variant as though it were the opposite:
+
+> the `full` variant is the ARCHIVAL copy. No original bytes are retained anywhere... whatever `full` stores is the best copy that will ever exist for that photo.
+
+The intent behind [`prog-strength-api#94`](https://github.com/Prog-Strength/prog-strength-api/pull/94) was sound — the old 2048 px clamp really was destroying phone photos, and lifting it was right. But raising the ceiling to native resolution at q95 does not preserve the original; it produces a slightly-degraded, larger copy while throwing the original away. The only way to store "the best copy that will ever exist" is to store the actual bytes.
+
+There is a second, quieter loss. Go's `image/jpeg` encoder emits only `DQT`, `SOF0`, `DHT`, `SOS` — no `APP2` segment, verified by walking the markers of its output. **Every ICC colour profile is discarded on re-encode.** A modern phone shoots Display P3; the stored copy carries no profile, so every viewer renders it as sRGB and the colours shift. The pipeline built to protect fidelity is quietly degrading it in two independent ways.
+
+### Strip the metadata losslessly instead
+
+None of the privacy requirement needs a re-encode. A JPEG is a sequence of marker segments, and EXIF lives in `APP1`. The file can be rewritten keeping only what should survive and dropping the rest, **without touching the entropy-coded scan data at all** — pure Go, no cgo, which matters given the `sqlite-vec`/musl history. PNG (`eXIf`) and WebP (`EXIF`) carry the same metadata in their own chunk structures and take the same treatment.
+
+The rule is a **whitelist, not a blocklist**, because location does not only live in EXIF GPS tags — XMP (`APP1`, different namespace) and IPTC (`APP13`) can both carry coordinates, and MakerNotes carry camera serial numbers. Rebuild with only:
+
+- **`APP2` / ICC profile** — kept, which *fixes* the colour bug above rather than preserving it.
+- **EXIF `Orientation`** — kept, so browsers rotate correctly. Keeping it also deletes the 80 ms `applyOrientation` pass and its full-resolution RGBA allocation, since nothing needs baking into pixels any more.
+
+Everything else goes: GPS, timestamps, `Make`/`Model`, MakerNote, XMP, IPTC, comments.
+
+What remains server-side is a decode and a thumbnail — the decode is unavoidable, since Go's stdlib does not expose JPEG's DCT-domain scaled decoding:
+
+| | today | proposed |
+|---|---|---|
+| CPU per photo | ~840 ms | ~460 ms |
+| stored per photo | 10.09 MB | 6.07 MB |
+| full-size fidelity | generation loss, no ICC | the original bytes, ICC intact |
+
+Cheaper, smaller, and higher fidelity at once — the rare case where the ambitious answer and the simple one agree, which is the same note the video SOW struck for a different reason.
 
 ### What this buys
 
@@ -85,20 +131,25 @@ The fix has to be both: **the bytes bypass the host, and the work leaves the req
 - **Perceived latency drops to the upload itself.** Today the user waits for transfer *plus* processing *plus* re-upload before the UI moves. After this, the UI advances as soon as the PUT completes; the render fills in behind it.
 - **The host stops buffering whole images in RAM.** `ParseMultipartForm(32 MiB)` plus `io.ReadAll` plus a full-resolution RGBA working buffer, on a 2 GB box shared with five other services, goes away from the request path entirely.
 - **Failures become visible.** A processing failure is a row in a known state with a logged error, not a severed TCP connection that no status-code metric will ever count.
+- **Photos get better, not just faster.** The stored full-size image stops being a degraded re-compression and becomes the original bytes, ICC profile intact — roughly half the CPU and ~40% less storage as a side effect.
 
 ### What it costs
 
 - A `pending` → `ready` lifecycle on `activity_photo`, and read surfaces that tolerate a photo that exists but is not yet renderable.
 - A worker, plus a reaper for reservations whose upload never arrived — both of which `activity_video` already needed and can be generalized from.
 - A round-trip that was one request becomes three.
+- **A hand-rolled metadata rewriter across three container formats**, replacing a stdlib re-encode that, whatever else is wrong with it, cannot produce an unreadable file. This is the real cost of the design and it is why the strip carries the heaviest test burden in [Testing](#testing) and an entry in [Open Questions](#open-questions).
+- **A staging object that briefly holds unstripped GPS.** It is never presigned, deleted on success, and lifecycle-expired as a backstop — but it exists, and the design has to keep saying so.
 
 ## Goals and Non-Goals
 
 ### Goals
 
 - **Photo bytes never transit the API host.** The client PUTs directly to the activity-photo bucket through a presigned URL.
-- **The image pipeline runs off the request path**, so no photo operation is bounded by the API's global 10s timeouts.
-- **The server stays authoritative on EXIF/GPS stripping and output dimensions.** Every stored variant is produced by `processPhoto`. No client-supplied bytes are ever served as a photo.
+- **The remaining image work runs off the request path**, so no photo operation is bounded by the API's global 10s timeouts.
+- **The server stays authoritative on metadata stripping.** No object is reachable through a presigned GET until the server has rewritten its metadata. The guarantee never rests on client cooperation.
+- **The stored full-size photo is the user's original bytes**, metadata-rewritten but never re-compressed — strictly higher fidelity than today, and ~40% less storage.
+- **ICC colour profiles survive**, fixing a silent colour shift the current re-encode introduces on every wide-gamut photo.
 - **A `pending` state that the UI renders honestly** — the photo appears in the strip immediately with a processing affordance, rather than vanishing until the worker finishes.
 - **Abandoned reservations are reaped**, so a cancelled or failed upload leaves neither a permanent pending row nor an orphan object.
 - **The synchronous endpoint keeps working through the transition**, so `api` and `web` can ship in either order.
@@ -107,8 +158,10 @@ The fix has to be both: **the bytes bypass the host, and the work leaves the req
 
 ### Non-Goals
 
-- **Changing the fidelity policy.** `full_max_edge_px = 20000` / `full_jpeg_quality = 95` were chosen deliberately in [`prog-strength-api#94`](https://github.com/Prog-Strength/prog-strength-api/pull/94) and are not revisited here. This SOW makes that policy affordable rather than arguing with it.
-- **Client-side re-encoding as the privacy mechanism.** A browser canvas re-encode does strip EXIF, but a presigned PUT accepts whatever the client sends — so the guarantee would rest on client cooperation. Videos accepted that and paid for it by staying out of the timeline. Photos are *in* the timeline; the server must remain authoritative.
+- **Re-encoding the full-size photo at all.** This SOW deletes that step rather than making it affordable. `full_max_edge_px` and `full_jpeg_quality` stop applying to the stored photo; see [Configuration](#configuration) for what becomes of them. This *serves* the goal of [`prog-strength-api#94`](https://github.com/Prog-Strength/prog-strength-api/pull/94) — the highest-fidelity copy the user will ever have — more completely than #94 itself could.
+- **Client-side metadata stripping as the privacy mechanism.** A browser canvas re-encode does drop EXIF, but a presigned PUT accepts whatever the client sends — so the guarantee would rest on client cooperation. Videos accepted that and paid for it by staying out of the timeline. Photos are *in* the timeline; the server must remain authoritative.
+- **Lossless rotation of pixels.** Keeping the `Orientation` tag is simpler, is what browsers already honour, and avoids the MCU-boundary edge cases a `jpegtran`-style transform has on dimensions that are not multiples of the block size.
+- **Re-processing existing photos.** Everything already stored was written by the old pipeline and stays as it is; its originals are gone and cannot be recovered. See [Backfill](#backfill).
 - **Raising the global `ReadTimeout`/`WriteTimeout`.** Weakening every route's slow-loris protection to accommodate one upload path is the wrong trade.
 - **Mobile.** `prog-strength-mobile` uses only the avatar endpoint (`lib/api.ts:1543`); it has no activity-photo upload, which is why it is absent from `repos:`.
 - **Avatar and TCX uploads.** Both sit under the same 10s ceiling and both should eventually follow this pattern. Out of scope here; tracked in Open Questions.
@@ -128,16 +181,17 @@ The columns 047 declared `NOT NULL` (`s3_key`, `thumb_s3_key`, `byte_size`, `wid
 -- status is the three-phase upload's state:
 --   'pending'    reserved; the client is uploading the original to S3
 --   'processing' commit confirmed the object; the worker holds it
---   'ready'      variants written; the row is renderable
+--   'ready'      stripped photo + thumb written; the row is renderable
 --   'failed'     the worker gave up; original retained for diagnosis
 -- Reads return 'ready' and 'processing'; only 'ready' resolves to URLs.
 -- No CHECK constraint, for the same reason content_type has none.
 ALTER TABLE activity_photo ADD COLUMN status TEXT NOT NULL DEFAULT 'ready';
 
--- The uploaded source object, distinct from the derived full/thumb variants.
--- Retained until the worker succeeds, then tagged for lifecycle reaping — it is
--- the only thing that makes a failed render retryable.
-ALTER TABLE activity_photo ADD COLUMN original_s3_key TEXT;
+-- The STAGING object the client PUT to, under a separate `uploads/` prefix.
+-- It still carries the source's GPS, so it is never presigned for GET and is
+-- deleted the moment the worker has written the stripped copy. Distinct from
+-- s3_key (the serving object) precisely so the two can never be confused.
+ALTER TABLE activity_photo ADD COLUMN upload_s3_key TEXT;
 
 -- Attempt accounting, so a poison image cannot be retried forever.
 ALTER TABLE activity_photo ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
@@ -164,13 +218,17 @@ The declared size is not the enforcement point. A client can lie; `commit` HEADs
 A single goroutine started alongside the existing background workers in `internal/server`, on a short tick:
 
 1. Claim one `processing` row whose `attempts` is under the cap, oldest first, via a conditional `UPDATE ... RETURNING` so a future second worker cannot double-claim.
-2. `GET` the original from S3 into memory. This is the one place a whole image is still buffered — but it is on a worker with no request deadline and a controllable concurrency of one, not on an inbound request path with five other services contending.
-3. Run `processPhoto` with the unchanged production opts.
-4. `PUT` the full and thumb variants under the existing variant keys (`buildPhotoKey`, unchanged).
-5. Update the row: real `s3_key`, `thumb_s3_key`, `byte_size`, `width`, `height`, `status = 'ready'`.
-6. Tag the original orphaned so the bucket's lifecycle rule reaps it.
+2. `GET` the staged object from S3 into memory. This is the one place a whole image is still buffered — but on a worker with no request deadline and a concurrency of one, not on an inbound request path contending with five other services.
+3. **Validate.** The presigned PUT accepts whatever the client sent, so everything `uploadPhoto` does today still has to happen here: sniff with `http.DetectContentType` against the allowlist, and run `boundDimensions` off `DecodeConfig` (4 µs) before any pixel is decoded. This is the decompression-bomb guard and it does not move.
+4. **Strip.** Rewrite the container keeping only `APP2`/ICC and EXIF `Orientation`; drop GPS, XMP, IPTC, MakerNote, timestamps, comments. Entropy-coded scan data is copied through untouched.
+5. **Thumbnail.** Decode once, CatmullRom to `thumb_max_edge_px`, encode at `thumb_jpeg_quality`. Unchanged from today, and now the only re-encode in the system.
+6. `PUT` the stripped photo under the serving key and the thumb under the thumb key (`buildPhotoKey`, unchanged).
+7. Update the row: `s3_key`, `thumb_s3_key`, `byte_size`, `width`, `height`, `status = 'ready'`.
+8. **`DELETE` the staged object** — not a lifecycle tag. It is the only copy carrying GPS and it should stop existing as soon as it is redundant, not in three days when the rule next runs.
 
-A decode failure is terminal — the bytes are not a usable image — so it goes straight to `failed` without retrying. Transient failures (S3, disk) increment `attempts` and retry with backoff, up to the cap, then `failed` with `last_error` recorded.
+A validation or strip failure is terminal — the bytes are not a usable image of an allowed type — so it goes straight to `failed` without retrying. Transient failures (S3, disk) increment `attempts` and retry with backoff, up to the cap, then `failed` with `last_error` recorded.
+
+The strip must be **verified, not assumed**: re-read the rewritten bytes and confirm they still decode, and that no disallowed segment survives, before the `PUT` in step 6. A metadata rewrite that silently corrupts the scan data would destroy the only copy of the photo, and unlike a re-encode there is no second chance.
 
 A **reaper** on a slower tick retires rows left `pending` past the presign TTL (the upload never happened) and tags any object under their reserved key. `activity_video` needs exactly this and should share the implementation rather than grow a second copy.
 
@@ -189,7 +247,7 @@ A **reaper** on a slower tick retires rows left `pending` past the presign TTL (
 | `POST` | `/activities/{id}/photos` | **deprecated**, retained through the transition |
 | `PATCH` | `/activities/{id}/photos/{photo_id}` | unchanged |
 | `PUT` | `/activities/{id}/photos/order` | unchanged |
-| `DELETE` | `/activities/{id}/photos/{photo_id}` | unchanged; also tags `original_s3_key` when present |
+| `DELETE` | `/activities/{id}/photos/{photo_id}` | unchanged; also deletes the staged object when one is still present |
 
 The synchronous endpoint stays mounted so `api` can deploy before `web`. It is removed in a follow-up once the client has moved — and its removal is what finally retires the 10s exposure, so it should not be left indefinitely.
 
@@ -207,7 +265,9 @@ Because `PhotoStrip` is shared, this lands on `/workouts/[id]`, `/running/[id]`,
 
 `modules/activity_photo_storage` gains an `aws_s3_bucket_cors_configuration` and a `cors_allowed_origins` variable, mirroring the video module: `PUT` and `HEAD`, origins set to the production web origin plus the Vercel preview wildcard, matching the API's own `cors.allowed_origins`.
 
-The instance role already holds `PutObject`/`GetObject`/`HeadObject` on this bucket for the synchronous path; the worker's `GET` needs no new grant. The existing orphan lifecycle rule reaps originals once tagged, so no new rule is needed — the tag key is already what the rule matches.
+The instance role already holds `PutObject`/`GetObject`/`HeadObject` for the synchronous path; the worker's `GET` needs no new grant, but the staged-object cleanup needs **`DeleteObject`**, which it does not currently have.
+
+A short lifecycle rule on the `uploads/` prefix — expire after one day — is the backstop for staged objects the worker never got to. It is a backstop, not the mechanism: the worker deletes on success, and this catches only the rows that died between upload and processing. Given the prefix holds the one GPS-bearing copy of each photo, this should be the most aggressive rule in the bucket, not the same three-day orphan window everything else gets.
 
 ### Configuration
 
@@ -220,17 +280,35 @@ process_tick_seconds   = 2    # worker poll interval
 reap_after_minutes     = 30   # retire pending rows older than this
 ```
 
-`max_upload_bytes = 33554432` is unchanged, but its enforcement moves: the presign carries a `content-length-range`, and `commit` re-checks the HEAD size. The comment justifying 32 MiB currently reasons about `ParseMultipartForm` buffering on a 4 GB host — that rationale no longer applies and the comment must be rewritten rather than left to mislead.
+**`full_max_edge_px` and `full_jpeg_quality` are deleted**, along with the block comment justifying them. Nothing re-encodes the full-size photo any more, so a knob controlling how it is re-encoded is worse than useless — it would read as live policy. `thumb_max_edge_px` and `thumb_jpeg_quality` stay and are now the only image-quality knobs in the system.
+
+`max_upload_bytes = 33554432` is unchanged in value but changes in both meaning and enforcement. Enforcement moves to the presign's `content-length-range` plus `commit`'s HEAD re-check. Its *rationale* changes more: the current comment reasons about `ParseMultipartForm` buffering on a shared 4 GB host, which stops being true, and it also claims the ceiling "covers any phone/camera JPEG or **HEIC**" — which is wrong today for an unrelated reason (Go's sniffer has no HEIC branch, so HEIC uploads 415 before size is ever consulted). Both halves of that comment must be rewritten rather than left to mislead; the HEIC gap itself is tracked separately.
 
 ### Testing
 
-- Unit: `reserve` rejects bad content types, oversize declarations, and a full activity; `commit` rejects a missing object (`409 upload_incomplete`), an oversize real object (`413`, with orphan tagging and reservation retirement), and a non-pending row (`409`).
-- Worker: success writes both variants and flips to `ready`; a decode failure goes terminal without retry; a transient S3 failure increments `attempts` and retries; the cap sends it to `failed` with `last_error` set.
+The metadata rewrite is the part that carries real risk — it is the only step that can destroy the sole copy of a photo, and the only step whose failure is a privacy incident rather than a broken image. It gets the most coverage:
+
+- **Strip, privacy:** a fixture JPEG carrying GPS, XMP, IPTC, MakerNote and a comment yields output where **none** of those segments survive. Asserted by walking markers, not by trusting the writer. Table-driven over JPEG, PNG (`eXIf`) and WebP (`EXIF`).
+- **Strip, preservation:** `APP2`/ICC survives byte-identically; EXIF `Orientation` survives with its value intact; **the entropy-coded scan data is byte-identical to the source**. That last assertion is what makes "lossless" a fact rather than a claim.
+- **Strip, round-trip:** the rewritten bytes still decode, and to the same dimensions.
+- **Strip, adversarial:** truncated files, a JPEG with no `APP1` at all, a file with two `APP1` segments, EXIF with a bogus segment length, and a file whose declared length would run past `EOF` — none panic; all either produce valid output or fail terminally.
+- **Colour regression:** a source with a Display P3 profile keeps it. This is the bug the current pipeline has; a test that fails against `processPhoto` and passes against the new path is the proof it is fixed.
+- Unit: `reserve` rejects bad content types, oversize declarations, and a full activity; `commit` rejects a missing object (`409 upload_incomplete`), an oversize real object (`413`, with cleanup and reservation retirement), and a non-pending row (`409`).
+- Worker: success writes both objects, flips to `ready`, and **deletes the staged object**; a validation failure goes terminal without retry; a transient S3 failure increments `attempts` and retries; the cap sends it to `failed` with `last_error` set.
+- Worker, privacy: after a successful run the staged key is gone — asserted directly, since this is the whole reason the staging prefix exists.
 - Concurrency: two workers cannot claim the same row.
-- Reaper: a `pending` row past TTL is retired and its key tagged.
+- Reaper: a `pending` row past TTL is retired and its staged object deleted.
 - Read: a `processing` photo serialises with null URLs and is excluded from timeline covers; a `ready` photo is byte-identical in shape to today's DTO plus `status`.
 - Regression: the deprecated synchronous endpoint still works end to end while mounted.
 - Web: per-route upload affordance; progress events fire; the strip stops polling once nothing is `processing`.
+
+### Backfill
+
+There is none, and there cannot be. Every photo already stored was re-encoded by the current pipeline and its original bytes were never retained — `config.toml` says so plainly ("No original bytes are retained anywhere"). Those photos keep whatever fidelity they have and keep no ICC profile; nothing can restore what was discarded at upload time.
+
+This is worth stating rather than leaving implicit, because it puts a price on delay: every photo uploaded between now and step 3 is one more that permanently carries the generation loss. It is a mild argument for sequencing the `api` work sooner rather than letting it sit behind other roadmap items.
+
+`DEFAULT 'ready'` on the new `status` column is what keeps the migration additive — existing rows are, by definition, already done.
 
 ### Sequencing
 
@@ -249,5 +327,6 @@ Step 1 is the reason this SOW does not need to be rushed. Step 5 is the reason i
 - **Should `avatar` and `tcx` follow?** Both sit under the same 10s ceiling. Avatar is capped at 5 MiB and re-encodes on the request path — the same defect with a smaller blast radius. TCX archives the original to S3 and parses synchronously; a large multi-hour ride file is a plausible trigger. Both want this pattern. Neither is in scope here, and doing all three at once triples the review surface. Recommend: fix all three under step 1, migrate photos here, revisit the others once this pattern has run in production.
 - **One worker or a claim-based pool?** Single-user, and the pipeline is CPU-bound on two burstable vCPUs — a pool would contend with the API rather than add throughput. The claim query is written to be safe for more than one worker so this can change without a migration, but v1 runs exactly one.
 - **Is `processing` worth showing at all?** The alternative is optimistic rendering: display the client's local `ObjectURL` in the strip until the server's version is ready. Better-feeling, and meaningfully more state to get wrong — the local blob has to survive a navigation, and it lies about what is actually stored. Recommend the honest placeholder for v1.
-- **Should the original be retained rather than reaped?** `full` is currently the archival copy, and the SOW for photos says so. Keeping the true original would make the fidelity policy revisable after the fact — re-render from source if the pipeline ever changes — at roughly double the storage. The S3 footprint dashboard exists to answer whether that is affordable; this is a product call, not a technical one.
+- **~~Should the original be retained rather than reaped?~~** *Resolved by the design above.* The question assumed the stored `full` was a derivative and the original was a second, optional copy costing double the storage. Once the re-encode is deleted, the stored photo **is** the original, and the only extra copy is the GPS-bearing staged upload — which should be deleted as fast as possible rather than retained. The trade-off dissolved: higher fidelity and ~40% *less* storage, not more.
+- **Is a lossless strip the right pure-Go bet?** It replaces a well-understood stdlib re-encode with a hand-rolled container rewrite across three formats, and the failure mode is worse — a re-encode that goes wrong produces a bad image, a rewrite that goes wrong produces an unreadable one, and there is no second copy. The mitigations are the verify-before-`PUT` step and the adversarial tests above. The alternative that avoids all of it is keeping the re-encode purely as insurance, at 304 ms, 28% size inflation, generation loss, and the ICC bug. Recommend the strip, but this is the one decision here worth a second opinion before implementation starts.
 - **What surfaces a `failed` photo to the user?** Nothing does, in this design — it is excluded from reads and visible only in logs and the row. At single-user scale that is arguably fine and arguably a silent data-loss path, which is the exact class of problem that produced this SOW. An alert on `failed` count is cheap and worth considering before this ships.
