@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: selected
 surface: running-tile
 idioms:
   - stacked-week
@@ -25,7 +25,14 @@ repos:
 
 # DX: Running Tile
 
-**Status**: Draft · **Last updated**: 2026-08-02
+**Status**: Selected · **Last updated**: 2026-08-03
+
+> **Selection** (2026-08-03): `load-ramp` is the **default** — it inherits the
+> `running` id and its rendering. `week-log`, `effort-heart`, and
+> `vertical-gain` ship as opt-in catalog tiles (`running_log`,
+> `running_effort`, `running_vertical`). `stacked-week` and `pace-band` are
+> **dropped**. Implemented by
+> [`sows/running-tile-family.md`](../sows/running-tile-family.md).
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
