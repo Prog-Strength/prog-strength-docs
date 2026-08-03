@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,22 @@ repos:
 
 # Photo Upload Off the Request Path
 
-**Status**: Ready for implementation · **Last updated**: 2026-08-02
+**Status**: Shipped · **Last updated**: 2026-08-03
+
+> **Shipped 2026-08-03.** A 6 MB JPEG uploads and renders. Steps 1-4 of
+> [Sequencing](#sequencing) are merged and deployed (api v0.100.0, infra, web).
+>
+> **Step 5 is deliberately still open**: the synchronous
+> `POST /activities/{id}/photos` remains mounted, and `internal/uploadwindow`
+> with it. Anything that still reaches that route gets the old behavior — full
+> re-encode, ICC discarded, generation loss — so this is worth closing rather
+> than leaving indefinitely. It was held back so the new path could be verified
+> on a real camera file first, which it now has been.
+>
+> Two gaps this SOW did not close, both stated rather than implied: there is no
+> end-to-end test through reserve → PUT → commit → worker (the units are
+> covered, the seams are not), and nothing surfaces a `failed` render to the
+> user — see [Open Questions](#open-questions).
 
 ## Introduction
 
