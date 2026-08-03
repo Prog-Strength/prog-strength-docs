@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Running Tile Family — Four Dashboard Tiles and the `RunningSection` Payload from `dx/running-tile`
 
-**Status**: Draft · **Last updated**: 2026-08-02
+**Status**: Shipped · **Last updated**: 2026-08-03
 
 > Frontend SOW with a substantial API companion. It implements the chosen DX variants
 > and therefore inherits that DX's `scope` — here **`in-system`**. The visual
