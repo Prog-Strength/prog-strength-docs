@@ -1,5 +1,5 @@
 ---
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,24 @@ repos:
 
 # Photo Upload Off the Request Path
 
-**Status**: Ready for implementation · **Last updated**: 2026-08-02
+**Status**: Shipped · **Last updated**: 2026-08-03
+
+> **Shipped 2026-08-03.** A 6 MB JPEG uploads and renders, verified against a
+> real camera file. All five steps of [Sequencing](#sequencing) are complete:
+> api v0.100.0, the bucket changes, the web uploader, and finally the retirement
+> of the synchronous endpoint it replaced
+> ([`prog-strength-api#112`](https://github.com/Prog-Strength/prog-strength-api/pull/112)).
+>
+> `internal/uploadwindow` survives on purpose — `uploadAvatar` and the TCX
+> routes still sit under the global 10s deadline and were never migrated, which
+> was an explicit non-goal here. They want the same treatment photos got.
+>
+> Two gaps this SOW did not close, stated rather than implied: there is no
+> end-to-end test through reserve → PUT → commit → worker (the units are
+> covered, the seams are not), and nothing surfaces a `failed` render to the
+> user — see [Open Questions](#open-questions). The second is the same
+> silent-loss shape that produced this SOW, so it is worth an alert on
+> `api_photo_process_failed_total` before relying on the path.
 
 ## Introduction
 
@@ -355,7 +372,7 @@ This SOW is the durable fix, and it is several days of work across three repos. 
 2. `infra` — CORS on the photo bucket. Independent, deployable alone, inert until used.
 3. `api` — migration, `reserve`/`commit`, worker, reaper, read-path status. Synchronous endpoint stays mounted.
 4. `web` — three-phase uploader, progress, processing state, polling.
-5. `api` — remove the deprecated endpoint, and `internal/uploadwindow` with it once no route still moves file bytes through this process.
+5. `api` — **done** ([#112](https://github.com/Prog-Strength/prog-strength-api/pull/112)). The deprecated endpoint is removed. `internal/uploadwindow` is NOT removed with it: `uploadAvatar` and `readTCXUpload` still move file bytes through this process and were out of scope here, so the stopgap outlives the route that motivated it.
 
 Step 1 is the reason this SOW does not need to be rushed. Step 5 is the reason it must not be abandoned halfway.
 
