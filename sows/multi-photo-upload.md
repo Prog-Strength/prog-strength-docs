@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Multi-Photo Upload
 
-**Status**: Draft · **Last updated**: 2026-08-03
+**Status**: Shipped · **Last updated**: 2026-08-03
 
 ## Introduction
 
