@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: running-tile
 idioms:
   - stacked-week
@@ -25,7 +25,7 @@ repos:
 
 # DX: Running Tile
 
-**Status**: Draft · **Last updated**: 2026-08-02
+**Status**: Awaiting selection ([draft PR](https://github.com/Prog-Strength/prog-strength-web/pull/146)) · **Last updated**: 2026-08-03
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
