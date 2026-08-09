@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -9,7 +9,7 @@ repos:
 
 # Weather Dashboard Tile
 
-**Status**: Draft · **Last updated**: 2026-08-08
+**Status**: Shipped · **Last updated**: 2026-08-09
 
 ## Introduction
 
