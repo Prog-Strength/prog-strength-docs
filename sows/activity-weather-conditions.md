@@ -324,15 +324,53 @@ It is deliberately *not* `Current`: `Current` is the tile's shape, carries no de
 point, direction, or precipitation, and has no observation timestamp because for
 a forecast "now" is implicit.
 
-**The response shape must be captured from a live call, not assumed.** The
-comment block at the top of `openweather.go` records why: three independently
-inlined copies of the path prefix all omitted `/onecall`, and every reading
-404'd in production. A second trap is documented there too — One Call 4.0 wraps
-readings in a top-level `data` array *including* `/current`, and parsing the root
+#### Endpoint contract (verified against live responses, 2026-08-09)
+
+**There is no historical endpoint.** One Call 4.0 has six paths, and history is
+served by the *same* `/data/4.0/onecall/timeline/1h` that `Hourly()` already
+calls, with a `start` parameter added. `Historical` is therefore a second caller
+of a path this codebase already speaks, not a new integration surface.
+
+| Fact | Value |
+| --- | --- |
+| Path | `/data/4.0/onecall/timeline/1h` — identical to `Hourly` |
+| Timestamp param | `start`, a **Unix timestamp** |
+| ISO 8601 `start` | Rejected: `400 {"cod":"400","message":"wrong start time"}` |
+| Envelope | `{data:[…], lat, lon, next, prev, timezone, timezone_offset}` |
+| `data[0].dt` | Exactly equals `start` |
+| Entries returned | **20 hourly buckets** from `start` forward |
+| History depth | 47 years |
+| Billing | Uniform with forecast calls; only `next`/`prev` pagination bills extra |
+
+Fields on each entry: `dt`, `temp`, `feels_like`, `dew_point`, `humidity`,
+`pressure`, `wind_speed`, `wind_deg`, `wind_gust`, `clouds`, `uvi`,
+`visibility`, `weather[]`. Every column in the data model above is backed by a
+real field.
+
+**Precipitation is nested and conditional.** It arrives as `rain: {"1h": 0.71}`
+and is **absent entirely when dry** — confirmed by probing a clear Denver hour
+(no key) against a wet Seattle hour (all 20 buckets carried it). `snow` is
+expected to be symmetric but was not observed; the provider should read both and
+treat absence as zero. This makes the "omit precipitation when zero" rendering
+decision the natural one, though for a different reason than originally
+recorded: the field is missing, not zero.
+
+**Two traps to carry over from `openweather.go`.** Its header comment records
+that three inlined copies of the path prefix all omitted `/onecall` and 404'd
+every reading in production; and that parsing the root instead of `data[]`
 decodes into a zero-value struct **without error**, yielding a plausible 0°C
-reading rather than a failure. A historical endpoint returning an empty or
-differently-wrapped array must therefore fail loudly, exactly as `Daily` does
-today. Fixtures go in `openweather_test.go` captured from live responses.
+reading rather than a failure. `Historical` must therefore read `data[0]`, and an
+empty `data` array must fail loudly exactly as `Daily` does. **`next`/`prev` are
+never followed** — each is a separately billed call, and the first page always
+contains the answer.
+
+Fixtures in `openweather_test.go` are captured from the live responses probed
+here, per that file's existing "re-capture rather than hand-edit" rule.
+
+**47 years of history means `status = 'unavailable'` is nearly unreachable** in
+practice — no activity in this product predates the window. The status stays in
+the model because a provider outage during a backfill still needs a terminal
+answer, but it should not be expected in normal operation.
 
 ### API Surface
 
@@ -631,32 +669,26 @@ table, and no existing read path changes.
    covers the backfill's own visibility in the meantime.
 6. **`prog-strength-docs`** — mark shipped on merge.
 
-## Open Questions
+## Resolved Questions
 
 1. **What is the One Call 4.0 historical endpoint's path and response shape?**
-   The 4.0 surfaces in `openweather.go` are `/onecall/current`,
-   `/onecall/timeline/1h`, and `/onecall/timeline/1day`; the historical surface
-   is presumably a sibling taking a timestamp, but that is an inference.
-   **Tentative lean**: none — this must be captured from a live call before
-   implementation, not assumed. The `/onecall` prefix omission that 404'd every
-   reading in production is the precedent for why.
+   **Resolved 2026-08-09** by live probe — there is no historical endpoint.
+   History is the existing `/onecall/timeline/1h` with a Unix-timestamp `start`
+   parameter, returning 20 hourly buckets in the usual `data` envelope, over 47
+   years, at the same billing rate. Full contract in Implementation Details §
+   *Endpoint contract*. This also resolves what was Open Question 2 (history
+   depth and billing), which is why no such question appears below.
 
-2. **How far back does the provider's history extend, and are historical calls
-   billed at the same rate as forecast calls?** This bounds what the backfill can
-   recover and how much it costs. **Tentative lean**: assume the same rate (the
-   conservative direction for a spend cap) and treat pre-window activities as
-   terminal `unavailable`. Verify on the account page; if history is billed at a
-   premium, `--limit` and `--rate` already provide the control needed and only
-   the dry-run's cost estimate needs adjusting.
+## Open Questions
 
-3. **Start point or route centroid for point-to-point activities?** For loops
+1. **Start point or route centroid for point-to-point activities?** For loops
    they are the same cell and the question is moot. For a long point-to-point run
    the finish can be a genuinely different microclimate. **Tentative lean**:
    start point. It is what the user stepped out into, it needs no geometry math,
    and `activity_weather.lat`/`lon` record which coordinate was used, so changing
    the rule later is a re-backfill and not a schema change.
 
-4. **Should `precip_mm` be hidden or shown as `0` when dry?** The design system
+2. **Should `precip_mm` be hidden or shown as `0` when dry?** The design system
    says omit empty beats, which argues for hiding. **Tentative lean**: hide.
    "0 mm" is a cell that says nothing, and the absence of a precipitation entry
    reads as "it was dry" without spending a slot on it.

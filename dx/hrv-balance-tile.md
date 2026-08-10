@@ -1,6 +1,8 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idioms:
+  - garmin-status-stack
 surface: hrv-balance-tile
 idioms:
   - garmin-status-stack
@@ -23,7 +25,19 @@ repos:
 
 # DX: HRV Balance Tile
 
-**Status**: Draft · **Last updated**: 2026-08-09
+**Status**: Selected · **Last updated**: 2026-08-10
+
+> **Selected:** `garmin-status-stack` — Garmin Connect's HRV Status card taken
+> structurally, register for register, with the 7-day average heroed over last
+> night (DX comparison PR Prog-Strength/prog-strength-web#157, closed
+> un-merged). Built for real by
+> [`sows/hrv-balance-tile-redesign.md`](../sows/hrv-balance-tile-redesign.md),
+> which also corrects the gauge scale and the mark inset, and records the
+> decision on the `baseline_drift_z` threshold the comparison PR raised.
+>
+> The prerequisite payload work,
+> [`sows/recovery-baseline-drift-payload.md`](../sows/recovery-baseline-drift-payload.md),
+> shipped 2026-08-10.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
