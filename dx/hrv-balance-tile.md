@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: hrv-balance-tile
 idioms:
   - garmin-status-stack
@@ -23,7 +23,7 @@ repos:
 
 # DX: HRV Balance Tile
 
-**Status**: Draft · **Last updated**: 2026-08-09
+**Status**: Awaiting selection · **Last updated**: 2026-08-10
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
