@@ -146,13 +146,16 @@ arithmetic. The standing rule holds — *never recompute a server figure* — so
 downstream work begins with a `prog-strength-api` SOW that extends
 `internal/recoverytrend`. It is small and additive.
 
-**Rolling pass.** `Compute` gains a companion that walks the chart window and,
-for each day *i*, computes the baseline over the trailing `baseline_window_days`
-ending at day *i−1* — the same exclude-today rule the scalar path already uses,
-applied per day. The read path's fetch widens from 31 days to
-`chart_window_days + baseline_window_days` = **60 days**. The compute is
-30 × 30 ≈ 900 float operations per request; no new tables, no new queries beyond
-the wider date range on the existing `whoop_recovery` read.
+**Rolling pass.** `Compute` gains a companion that walks the series and, for each
+day *i*, computes the baseline over the trailing `baseline_window_days` ending at
+day *i−1* — the same exclude-the-day-itself rule the scalar path already uses,
+applied per day. **The series length does not change**: it stays the
+`baseline_window_days + 1` = **31 entries** (30 preceding days plus today) that
+`days[]` already carries, so no new window knob is introduced. What widens is the
+*fetch* — `2 × baseline_window_days + 1` = **61 local dates**, the extra 30 being
+lead-in so the oldest charted day still has a full trailing sample. The compute
+is 31 × 30 ≈ 930 float operations per request; no new tables, no new queries
+beyond the wider date range on the existing `whoop_recovery` read.
 
 **Wire additions** (all additive, all nullable, no existing field changes):
 
@@ -182,7 +185,6 @@ the wider date range on the existing `whoop_recovery` read.
 `[recovery]`, never env vars:
 
 ```toml
-chart_window_days   = 30    # days of daily marks the tile draws
 baseline_drift_days = 28    # how far back the baseline is compared against
 baseline_drift_z    = 0.35  # |delta| must exceed this many SDs to read rising/falling
 ```
@@ -273,7 +275,7 @@ Two of these are the difference between a good mockup and a broken one.
 
 The headline fixture is the state the shipped tile cannot express: **a balanced
 morning inside a baseline that has been climbing.** `days` is abridged for
-legibility — **build it out to all 30 entries**, oldest→newest, ending today,
+legibility — **build it out to all 31 entries**, oldest→newest, ending today,
 drawing HRV from a distribution whose mean walks from ~82 to ~88 across the
 window with SD ≈ 20, and including **at least one interior all-null day** so the
 gap case is visible by default.
@@ -340,10 +342,12 @@ of them:
 - **`suppressed`** — today 61 ms, `zScore: −1.36`, well under the band, with a
   steady baseline. The dramatic state. Must read as *true and slightly
   concerning*, never as an alarm.
-- **`partial-band`** — 40 nights of history: `days[0..3]` carry
-  `baselineAvg: null` and `status: "unknown"`, the rest are populated. The band
-  begins part-way across the chart and the earliest dots are uncoloured. **New
-  with this refactor and easy to render as a broken chart** — get it right.
+- **`partial-band`** — 40 nights of history: the five oldest charted days
+  (`days[0..4]`) carry `baselineAvg: null` and `status: "unknown"` because their
+  own trailing windows hold fewer than 14 readings; the rest are populated. The
+  band begins part-way across the chart and the earliest dots are uncoloured.
+  **New with this refactor and easy to render as a broken chart** — get it
+  right.
 - **`calibrating`** — `hrvDays: 9`, every average, bound, and z null, both
   `status` and `direction` `unknown`. No band anywhere, no chart frame around
   nothing, no `NaN`. Every new Whoop user lives here for two weeks.
@@ -406,8 +410,8 @@ abandons the ms axis entirely.
 - **dual-window** — **Heroes the step between two windows.** Splits the body into
   two side-by-side panels, `PREV 2W` and `LAST 2W`, each drawing 14 marks at a
   generous ~18px pitch — Garmin-scale dots — over **its own band segment drawn at
-  its own level**. It spends the last 28 of the window's 30 days; the two oldest
-  are dropped rather than making the panels uneven. Because the two bands sit at different heights, the drift is a
+  its own level**. It spends the last 28 of the series' 31 days; the three
+  oldest are dropped rather than making the panels uneven. Because the two bands sit at different heights, the drift is a
   literal visible offset between the panels rather than a slope you have to
   estimate. Between them, one figure: `82 → 88 ms ▲ +6`. This is the only variant
   where the two-week comparison is structural rather than annotated, and the only
@@ -545,14 +549,17 @@ compare these I am trying to decide:
 >
 > Then **two** SOWs, in order:
 >
-> 1. **`prog-strength-api`** — the rolling per-day baseline and `baseline_trend`
->    specified in *The API refactor*, with the two agreement invariants under
->    test, plus the `RecoveryDayPoint` / `RecoveryBaselineTrendView` adapter
->    fields in `prog-strength-web/lib/dashboard.ts`. Ships alone; the tile keeps
->    rendering as-is against it.
+> 1. **[`sows/recovery-baseline-drift-payload.md`](../sows/recovery-baseline-drift-payload.md)**
+>    — the rolling per-day baseline and `baseline_trend` specified in *The API
+>    refactor*, with the two agreement invariants under test, plus the
+>    `RecoveryDayPoint` / `RecoveryBaselineTrendView` adapter fields in
+>    `prog-strength-web/lib/dashboard.ts`. **Dispatch this first.** It ships
+>    alone: the tile keeps rendering as-is against it, minus the unrounded
+>    millisecond headline, which that SOW fixes in passing.
 > 2. **`prog-strength-web`** — *"rebuild the `hrv_balance` tile per the
 >    `<chosen-idiom>` variant from `dx/hrv-balance-tile`, production-quality,
->    conforming to the design system"* — replacing `HrvBalanceCard`'s body, fixing
->    the unrounded-millisecond headline, and dropping the non-uniform
->    `preserveAspectRatio`. No catalog change: same `TileId`, same title, same
->    tray entry, same `href`. The mockup code is never promoted as-is.
+>    conforming to the design system"* — replacing `HrvBalanceCard`'s body and
+>    dropping the non-uniform `preserveAspectRatio`. (The unrounded-millisecond
+>    headline is already gone by then; SOW 1 fixes it.) No catalog change: same
+>    `TileId`, same title, same tray entry, same `href`. The mockup code is never
+>    promoted as-is.
