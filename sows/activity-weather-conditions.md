@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -10,7 +10,7 @@ repos:
 
 # Activity Weather Conditions
 
-**Status**: Draft · **Last updated**: 2026-08-09
+**Status**: Shipped · **Last updated**: 2026-08-09
 
 ## Introduction
 
