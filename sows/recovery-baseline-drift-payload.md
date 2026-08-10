@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Recovery Baseline Drift Payload
 
-**Status**: Draft · **Last updated**: 2026-08-09
+**Status**: Shipped · **Last updated**: 2026-08-10
 
 ## Introduction
 
