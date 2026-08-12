@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: abandoned
 surface: recovery-page
 idioms:
   - readiness-command-hero
@@ -23,7 +23,23 @@ repos:
 
 # DX: Recovery Page
 
-**Status**: Draft · **Last updated**: 2026-07-23
+**Status**: Abandoned · **Last updated**: 2026-08-12
+
+> **Abandoned in favour of
+> [`dx/recovery-page-refresh.md`](recovery-page-refresh.md).** This exploration
+> ran on 2026-07-23 and built its five variants on `dx/recovery-page`
+> ([prog-strength-web#207](https://github.com/Prog-Strength/prog-strength-web/pull/207),
+> draft, never selected). It is abandoned for one reason: it predates the
+> recovery tile family. `hrv_balance` (2026-08-10), `recovery_log` and
+> `resting_hr` (2026-08-12) all shipped after these variants were built, so none
+> of them could inherit the HRV chart that is now the best thing in the recovery
+> surface — and the arrival of five dashboard tiles answering *"how am I
+> today?"* reassigned this page's job from today to history. Picking a winner
+> here would have shipped a page that ignores four tiles built since.
+>
+> The four fixed decisions below were right and are **carried forward unchanged**
+> into the refresh: no dead hero, compact paginated ledger, Whoop settings
+> backlink, and band colour working harder. Close #207 without merging.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
