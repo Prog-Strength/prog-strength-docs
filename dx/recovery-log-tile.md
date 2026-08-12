@@ -1,6 +1,8 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idioms:
+  - band-rail-and-recent
 surface: recovery-log-tile
 idioms:
   - score-gutter
@@ -23,7 +25,19 @@ repos:
 
 # DX: Recovery Log Tile
 
-**Status**: Draft · **Last updated**: 2026-08-11
+**Status**: Selected · **Last updated**: 2026-08-11
+
+> **Selected:** `band-rail-and-recent` — a 14-day recovery rail read against its
+> own baseline tick, over the three most recent mornings in full detail (DX
+> comparison PR Prog-Strength/prog-strength-web#161, closed un-merged). The only
+> variant in the spread that shows more than a week, and the only one that does
+> not give every day a row; it was the `sparse` fixture that decided it. Built
+> for real by
+> [`sows/recovery-log-tile-redesign.md`](../sows/recovery-log-tile-redesign.md),
+> which carries the four binding defects named in *Context* and corrects five
+> further defects in the mockup — chief among them a calibrating gate that reads
+> the recovery-score average but prints the HRV night count, two independently
+> emitted figures that can disagree by weeks.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
