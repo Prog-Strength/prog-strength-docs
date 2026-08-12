@@ -1,6 +1,6 @@
 ---
 type: sow
-status: ready_for_implementation
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -8,7 +8,7 @@ repos:
 
 # Recovery Log Tile Redesign
 
-**Status**: Ready for implementation · **Last updated**: 2026-08-11
+**Status**: Shipped · **Last updated**: 2026-08-12
 
 ## Introduction
 
