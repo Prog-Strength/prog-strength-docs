@@ -1222,10 +1222,20 @@ In `lib/dashboard-tiles.ts`, in the `recovery_log` entry, replace:
 with:
 
 ```ts
-    description: "A fortnight of recovery, and your last three mornings in full.",
+    description: "Two weeks of recovery score — your last three mornings in full.",
 ```
 
 Change nothing else in the entry — same `id`, same `title`, same `href`.
+
+> **Revised during review** from the SOW's suggested *"A fortnight of recovery, and your
+> last three mornings in full."* — which the SOW offers as "something like", not as fixed
+> copy. Three reasons, all checkable against the catalog: the rail plots only
+> `recoveryScore`, and bare "recovery" reads first as *rest/deload* in a strength app;
+> "fortnight" was the sole Britishism in any user-facing string, and would have had the
+> tile call its own window "a fortnight" to sighted users while `railLabel` says "14 days"
+> to screen readers; and the em dash is the house shape for a
+> primary-register-then-secondary-register description (`hrv_balance`, `weather`), which is
+> exactly what this tile is.
 
 - [ ] **Step 2: Verify nothing asserted the old string**
 
