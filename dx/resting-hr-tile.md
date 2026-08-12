@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: resting-hr-tile
 idioms:
   - delta-ledger
@@ -24,7 +24,14 @@ repos:
 
 # DX: Resting HR Tile
 
-**Status**: Draft · **Last updated**: 2026-08-12
+**Status**: Awaiting selection · **Last updated**: 2026-08-12
+
+> **Variants are up.** All five idioms are built and rendered side by side at
+> true tile width on `/design-explore/resting-hr-tile`, driven across all six
+> fixtures. Draft PR (never merged):
+> [`prog-strength-web#dx/resting-hr-tile`](https://github.com/Prog-Strength/prog-strength-web/pulls?q=is%3Apr+head%3Adx%2Fresting-hr-tile).
+> Awaiting the selection gate — tick the winner's box on that PR, set `status:`
+> here to `selected`, and **close the PR without merging**.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
