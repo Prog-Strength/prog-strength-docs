@@ -82,7 +82,9 @@ OpenWeather's Geocoding API under the same key.
   adding one is out of scope.
 - **No MCP tool or agent capability.** The chat agent does not get weather. It
   was not asked for, and every agent capability is a new MCP tool plus token cost
-  on every conversation.
+  on every conversation. **Superseded** — the agent gets weather in
+  [`weather-agent-tool.md`](weather-agent-tool.md), which was asked for and
+  which adds exactly one tool.
 - **No training verdict.** An earlier framing had the tile derive "good run
   window: now–4pm" from wind, precipitation, and daylight. Deliberately rejected
   in favour of a conventional forecast card — the derived-verdict version needs
