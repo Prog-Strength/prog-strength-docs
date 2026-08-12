@@ -1,6 +1,6 @@
 ---
 type: sow
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -10,7 +10,7 @@ repos:
 
 # WHOOP Sleep Ingestion & Sleep Tile
 
-**Status**: Draft · **Last updated**: 2026-08-11
+**Status**: Shipped · **Last updated**: 2026-08-11
 
 > Full-stack SOW. `prog-strength-api` does the scope, client, table, sync,
 > webhook, endpoint, and dashboard-section work; `prog-strength-web` does the
