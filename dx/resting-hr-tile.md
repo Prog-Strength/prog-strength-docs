@@ -1,6 +1,8 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idioms:
+  - sorted-strip
 surface: resting-hr-tile
 idioms:
   - delta-ledger
@@ -24,7 +26,23 @@ repos:
 
 # DX: Resting HR Tile
 
-**Status**: Draft · **Last updated**: 2026-08-12
+**Status**: Selected · **Last updated**: 2026-08-12
+
+> **Selected:** `sorted-strip` — the last thirty mornings sorted low to high as a
+> strip of thin ticks, today's filled and labelled, the 30-day average a second
+> dashed tick, under the caption `4th lowest of your last 30` (DX comparison PR
+> Prog-Strength/prog-strength-web#164, closed un-merged). The deliberate outlier
+> in the spread, and the only variant that does not primarily answer "over time"
+> — it won on the two things a ranking buys that a chart cannot: it is the only
+> variant whose main graphic **survives `calibrating` intact** (a rank needs no
+> baseline, only a distribution), and it stays visibly distinct from
+> `hrv_balance` beside it because it draws no line. `flat-month` is boring by
+> construction here: there is no axis to auto-scale, so a 48–50 month reads as
+> `48 lowest` / `50 highest` and nothing else. Built for real by
+> [`sows/resting-hr-tile.md`](../sows/resting-hr-tile.md), which corrects four
+> defects found by reading the mockup against the shipped code — integer-first
+> ranking, the colour gate below, label de-confliction, and newest-first recent
+> rows.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
@@ -44,6 +62,21 @@ repos:
 > add `prog-strength-api` to `repos:` — but read *The verdict this tile does not
 > have* before assuming that means the tile can say whatever the others say. It
 > cannot, and that constraint is the most interesting thing about this surface.
+>
+> **Correction, recorded after selection.** The first sentence is right and the
+> second is wrong, and the distinction matters for every new-tile DX after this
+> one. No new *data* is needed — but the tile **catalog is server-owned**.
+> `internal/dashboard/tiles.go` is the source of truth and
+> `lib/dashboard-tiles.ts` is its mirror; `layout_handler.go` rejects an unknown
+> id on write with a `400`, `Layout.Normalize` drops it on read, and the contract
+> tests on both sides assert the id set and order. A web-only catalog entry
+> therefore cannot be added by a user at all. `sows/resting-hr-tile.md` carries
+> `prog-strength-api` in its `repos:` for exactly this, and for one thing with no
+> test behind it: `resting_hr` must also join `handler.go`'s `recoveryFamily`
+> slice, or a layout whose only recovery tile is this one gets no `recovery`
+> section built and the tile shows a connect CTA to an already-connected user.
+> **A DX that adds a tile always touches the API, even when it needs no new
+> field.**
 
 ## Context
 
@@ -194,6 +227,16 @@ needs a rule. All five variants use this one:
 | A reading **above** the 30-day average | `--warning`, at text or mark weight |
 | A reading **at or below** the average | Neutral ink — `--foreground` / `--muted` |
 | An absent morning | `--surface-2`, as an absence |
+
+> **Correction, recorded after selection.** This table and the `sorted-strip`
+> idiom below disagree: the idiom says `--warning` appears "only if today's tick
+> falls in the upper third of the athlete's own month", which is a different rule
+> and leaves a morning that is above the average but outside the top third
+> uncoloured. `sows/resting-hr-tile.md` resolves it in favour of **this table**,
+> chiefly because the selected card draws the average as a tick — so under the
+> upper-third rule today's mark could sit visibly right of it and still be
+> neutral ink, which is the card contradicting its own graphic. When
+> `restingHrAvg` is null the card spends no colour at all.
 
 Three things about it, all binding.
 
