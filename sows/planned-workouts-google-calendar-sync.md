@@ -50,6 +50,14 @@ The web app renders planned workouts on the existing calendar as visually-distin
 ### Non-Goals
 
 - **Two-way sync.** Reading changes back from Google Calendar into Prog Strength is out of scope for v1.
+
+  > **The grant now has a reader — but this non-goal still holds.** Since
+  > [`google-calendar-dashboard-tile`](google-calendar-dashboard-tile.md), the same
+  > `calendar.events` grant is also *read*: `events.list` on `primary`, feeding a
+  > dashboard tile. No new scope was needed and no connected user re-consented,
+  > because `calendar.events` was always read **and** write. That is a read, not a
+  > sync — nothing flows back into Prog Strength's own data, and the write path
+  > described below is untouched.
 - **Planned runs.** The schema carries an `activity_kind` discriminator and a polymorphic completion link so planned runs (and other activity types) extend later without migration churn, but v1 plans only **lifting** workouts.
 - **Mobile UI.** v1 ships the web + agent surfaces; the mobile planned-workout UI is a later parity phase. (The API/MCP it would consume are built here.)
 - **Inferred plan↔session matching.** Linking a logged session to a plan is an explicit action, not heuristically guessed by date/lift.

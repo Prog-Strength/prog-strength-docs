@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-api
   - prog-strength-web
@@ -8,7 +8,7 @@ repos:
 
 # Google Calendar Dashboard Tile
 
-**Status**: Draft · **Last updated**: 2026-08-12
+**Status**: Shipped · **Last updated**: 2026-08-12
 
 ## Introduction
 
