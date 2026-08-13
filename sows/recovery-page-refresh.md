@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 repos:
   - prog-strength-web
   - prog-strength-docs
@@ -7,7 +7,7 @@ repos:
 
 # Recovery Page Refresh — `aligned-deck`
 
-**Status**: Draft · **Last updated**: 2026-08-12
+**Status**: Shipped · **Last updated**: 2026-08-13
 
 ## Introduction
 
