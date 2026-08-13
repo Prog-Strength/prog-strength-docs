@@ -1,6 +1,6 @@
 ---
 type: dx
-status: draft
+status: awaiting_selection
 surface: recovery-page-refresh
 idioms:
   - aligned-deck
@@ -22,7 +22,19 @@ repos:
 
 # DX: Recovery Page (refresh)
 
-**Status**: Draft · **Last updated**: 2026-08-12
+**Status**: Awaiting selection · **Last updated**: 2026-08-13
+
+> **All four variants are built and on the preview deploy**, at
+> `/design-explore/recovery-page-refresh` on branch `dx/recovery-page-refresh`
+> ([prog-strength-web draft PR](https://github.com/Prog-Strength/prog-strength-web/pulls?q=is%3Apr+head%3Adx%2Frecovery-page-refresh)).
+> One comparison route stacks `aligned-deck`, `metric-focus`, `ledger-first` and
+> `season-rail` full-width and drives all four across the same four fixtures —
+> the representative history below, the same history at 7am before today lands,
+> a nine-morning calibrating payload, and a month of readings on a 1-year range.
+> The HRV panel is one shared component in all four, per Fixed Decision 2.
+>
+> Waiting on the owner: pick an idiom, tick its box on the PR, set `status:
+> selected` here naming the winner, and **close the PR without merging**.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
