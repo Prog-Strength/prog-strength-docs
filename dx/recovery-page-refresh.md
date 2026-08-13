@@ -1,6 +1,7 @@
 ---
 type: dx
-status: draft
+status: selected
+selected_idiom: aligned-deck
 surface: recovery-page-refresh
 idioms:
   - aligned-deck
@@ -22,7 +23,19 @@ repos:
 
 # DX: Recovery Page (refresh)
 
-**Status**: Draft · **Last updated**: 2026-08-12
+**Status**: Selected — `aligned-deck` · **Last updated**: 2026-08-12
+
+> **Selected: `aligned-deck`.** Comparison PR
+> [prog-strength-web#167](https://github.com/Prog-Strength/prog-strength-web/pull/167)
+> closed un-merged. The winner does **not** carry prerequisite P2, so resting HR
+> ships answered by the trailing average that already exists and
+> [`dx/resting-hr-tile.md`](resting-hr-tile.md)'s Open Question 3 is settled in
+> the negative for now. The two downstream SOWs, in order:
+>
+> 1. [`sows/recovery-history-endpoint.md`](../sows/recovery-history-endpoint.md)
+>    — prerequisite **P1**, the enriched recovery view at page scale.
+> 2. [`sows/recovery-page-refresh.md`](../sows/recovery-page-refresh.md) — the
+>    page itself, per the `aligned-deck` variant.
 
 > A DX (Design Exploration) is the platform's **divergent** work type. Unlike a
 > SOW it does not converge on one correct implementation — it produces N
