@@ -20,7 +20,8 @@
 2. **All-day events are pinned outside the window math.** `visibleEvents` partitions the day into all-day and timed, pins the all-day rows at the top, and runs the anchor/backfill rule over the timed remainder with the leftover row budget. Otherwise a holiday marker would anchor the window at index 0 and fill a 6pm tile with the morning.
 3. **The events service takes a local `EventsConfig`, not `config.CalendarEventsConfig`.** `internal/calendarsync` imports no `internal/config` today (unlike `internal/weather`); `ActivityServiceDeps` is the package's established shape for injected collaborators. `internal/server` maps the typed config across. Keeps the package's tests free of the config package.
 4. **The request window is capped at 31 days** (`400` beyond it). The tile asks for 8 days; an unbounded window is a Google call and a response size a client should not be able to choose.
-5. **Time formatting uses `toLocaleTimeString`.** The SOW's mock writes `12:30p`; a hand-rolled `h % 12` formatter is exactly what prints `0:00p` for noon, which the SOW's test forbids. Locale formatting is the correct answer to "respects the browser locale".
+5. **Go comments use US spelling.** `golangci-lint` runs `misspell` with `locale: US`, so `behaviour`, `economise`, `normalise` and friends are lint errors *in Go files* (not in TOML, and not in the web repo). Some prose in this plan is quoted from the SOW, which uses British spelling — Americanize it when it lands in a `.go` file. This already bit once.
+6. **Time formatting uses `toLocaleTimeString`.** The SOW's mock writes `12:30p`; a hand-rolled `h % 12` formatter is exactly what prints `0:00p` for noon, which the SOW's test forbids. Locale formatting is the correct answer to "respects the browser locale".
 
 ---
 
@@ -961,7 +962,7 @@ git commit -m "feat: add calendar event link lookup and read cache"
 // that it was extracted from Service precisely because a second consumer
 // appeared. A third consumer is the same argument. Putting the reader
 // elsewhere would mean exporting `connector`, `grant`, and the
-// revoke-on-refresh-failure behaviour across a package boundary, in exchange
+// revoke-on-refresh-failure behavior across a package boundary, in exchange
 // for a package name that reads slightly better.
 //
 // NO NEW SCOPE. The granted scope is CalendarEventsScope
