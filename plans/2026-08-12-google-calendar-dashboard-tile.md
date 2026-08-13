@@ -1612,7 +1612,12 @@ func (h *Handler) getEvents(w http.ResponseWriter, r *http.Request) {
 		httpresp.Error(w, http.StatusBadRequest, "start_date and end_date are required")
 		return
 	}
-	if end.Sub(start) > maxEventWindowDays*24*time.Hour {
+	// Counted in CALENDAR days in the user's zone, not in elapsed hours. A
+	// 31-inclusive-day window spanning a fall-back transition is 745 hours, so
+	// `end.Sub(start) > 31*24*time.Hour` would reject a legal maximum window
+	// twice a year — for exactly the non-UTC users the daterange contract
+	// exists to protect, and with a message that would be untrue.
+	if start.In(loc).AddDate(0, 0, maxEventWindowDays).Before(end) {
 		httpresp.Error(w, http.StatusBadRequest,
 			fmt.Sprintf("window is too long (max %d days)", maxEventWindowDays))
 		return
