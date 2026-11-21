@@ -1,5 +1,11 @@
 # prog-strength-docs
 
+> [!NOTE]
+> **Prog Strength was retired in November 2026.** It is offline on purpose, to cut
+> hosting costs, and this repository is archived as read-only. progstrength.fitness
+> no longer serves the app. The database, media, and infrastructure state are kept in
+> cold storage; see [prog-strength-archive](https://github.com/Prog-Strength/prog-strength-archive).
+
 Long-form documentation for **Prog Strength** — statements of work, design notes, and anything else that helps maintain and continue development on the project.
 
 Code lives in the service repos (`prog-strength-api`, `prog-strength-mcp`, `prog-strength-agent`, `prog-strength-web`, `prog-strength-infra`); this repo is for the docs that explain *why* the code is the way it is.
